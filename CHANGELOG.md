@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.0.2-alpha] - 2026-04-21
+
+### Added
+- Frontend: Add home lobby demo page
+
 ## [0.0.1-alpha] - 2026-04-06
 
 ### Added
