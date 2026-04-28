@@ -32,3 +32,6 @@ logs/
 # Misc
 pnpm-lock.yaml
 yarn-error.log
+
+# Test Directory
+test/
