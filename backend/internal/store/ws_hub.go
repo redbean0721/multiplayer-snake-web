@@ -9,11 +9,10 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-// Client 封裝了 WebSocket 連線與互斥鎖，保證併發寫入安全
 type Client struct {
 	Conn *websocket.Conn
 	Mu   sync.Mutex
-	Name string // 記錄玩家名稱
+	Name string
 }
 
 func (c *Client) SendJSON(msgType string, payload interface{}) {
@@ -29,7 +28,6 @@ func (c *Client) SendRaw(data []byte) {
 	c.Conn.WriteMessage(websocket.TextMessage, data)
 }
 
-// 遊戲實體定義
 type Point struct {
 	X int `json:"x"`
 	Y int `json:"y"`
@@ -44,31 +42,45 @@ type Snake struct {
 
 type Hub struct {
 	Clients map[*Client]bool
-	Mu      sync.RWMutex // 保護 Map 的鎖
+	Mu      sync.RWMutex
 
-	// 多人遊戲狀態
-	Snakes map[*Client]*Snake
-	Food   Point
-	Cols   int
-	Rows   int
+	Snakes       map[*Client]*Snake
+	Foods        []Point
+	MaxFood      int       
+	NextFoodTime time.Time 
+	Cols         int
+	Rows         int
 }
 
 func NewHub() *Hub {
 	h := &Hub{
-		Clients: make(map[*Client]bool),
-		Snakes:  make(map[*Client]*Snake),
-		Cols:    40, // ✨ 伺服器統一決定地圖大小：寬 40 格
-		Rows:    25, // ✨ 伺服器統一決定地圖大小：高 25 格
+		Clients:      make(map[*Client]bool),
+		Snakes:       make(map[*Client]*Snake),
+		Foods:        make([]Point, 0),
+		MaxFood:      40, 
+		Cols:         40,
+		Rows:         25,
+		NextFoodTime: time.Now().Add(2 * time.Second), 
 	}
-	h.spawnFood()
-	go h.RunGameEngine() // 伺服器一啟動，世界時鐘就開始運轉
+
+	// 一開始先放 5 顆食物作為開局基礎
+	for i := 0; i < 5; i++ {
+		h.spawnSingleFood()
+	}
+
+	go h.RunGameEngine()
 	return h
 }
 
-func (h *Hub) spawnFood() {
-	for {
+func (h *Hub) spawnSingleFood() {
+	if len(h.Foods) >= h.MaxFood {
+		return
+	}
+
+	for attempts := 0; attempts < 50; attempts++ { 
 		fx, fy := rand.Intn(h.Cols), rand.Intn(h.Rows)
 		overlap := false
+
 		for _, snake := range h.Snakes {
 			for _, s := range snake.Body {
 				if s.X == fx && s.Y == fy {
@@ -77,8 +89,16 @@ func (h *Hub) spawnFood() {
 				}
 			}
 		}
+
+		for _, f := range h.Foods {
+			if f.X == fx && f.Y == fy {
+				overlap = true
+				break
+			}
+		}
+
 		if !overlap {
-			h.Food = Point{X: fx, Y: fy}
+			h.Foods = append(h.Foods, Point{X: fx, Y: fy})
 			break
 		}
 	}
@@ -94,7 +114,7 @@ func (h *Hub) Unregister(c *Client) {
 	h.Mu.Lock()
 	if _, ok := h.Clients[c]; ok {
 		delete(h.Clients, c)
-		delete(h.Snakes, c) // 玩家斷線時，把他的蛇移除
+		delete(h.Snakes, c)
 		c.Conn.Close()
 	}
 	h.Mu.Unlock()
@@ -108,12 +128,10 @@ func (h *Hub) Broadcast(msgType string, payload interface{}) {
 	}
 }
 
-// 玩家加入遊戲
 func (h *Hub) SpawnSnake(c *Client) {
 	h.Mu.Lock()
 	defer h.Mu.Unlock()
 	
-	// 在地圖中央附近隨機出生
 	startX := h.Cols/2 + rand.Intn(10) - 5
 	startY := h.Rows/2 + rand.Intn(10) - 5
 	
@@ -125,37 +143,31 @@ func (h *Hub) SpawnSnake(c *Client) {
 	}
 }
 
-// 接收玩家方向改變
 func (h *Hub) ChangeDirection(c *Client, x, y int) {
 	h.Mu.Lock()
 	defer h.Mu.Unlock()
 	if snake, ok := h.Snakes[c]; ok {
-		// 防止 180 度大迴轉自殺
 		if snake.Dir.X != 0 && x == -snake.Dir.X { return }
 		if snake.Dir.Y != 0 && y == -snake.Dir.Y { return }
 		snake.NextDir = Point{X: x, Y: y}
 	}
 }
 
-// ✨ 多人遊戲世界時鐘
 func (h *Hub) RunGameEngine() {
 	ticker := time.NewTicker(120 * time.Millisecond)
 	for range ticker.C {
 		h.Mu.Lock()
 
-		// 1. 移動所有蛇
 		for c, snake := range h.Snakes {
 			snake.Dir = snake.NextDir
 			newHead := Point{X: snake.Body[0].X + snake.Dir.X, Y: snake.Body[0].Y + snake.Dir.Y}
 
-			// 撞牆判定
 			if newHead.X < 0 || newHead.X >= h.Cols || newHead.Y < 0 || newHead.Y >= h.Rows {
 				c.SendJSON("game_over", map[string]int{"score": snake.Score})
-				delete(h.Snakes, c) // 撞牆死掉
+				delete(h.Snakes, c)
 				continue
 			}
 
-			// 撞到自己或其他蛇的判定
 			collision := false
 			for _, otherSnake := range h.Snakes {
 				for _, s := range otherSnake.Body {
@@ -167,37 +179,60 @@ func (h *Hub) RunGameEngine() {
 			}
 			if collision {
 				c.SendJSON("game_over", map[string]int{"score": snake.Score})
-				delete(h.Snakes, c) // 撞蛇死掉
+				delete(h.Snakes, c)
 				continue
 			}
 
-			// 推進身體
 			snake.Body = append([]Point{newHead}, snake.Body...)
 
-			// 吃食物判定
-			if newHead.X == h.Food.X && newHead.Y == h.Food.Y {
+			eatenIdx := -1
+			for i, f := range h.Foods {
+				if newHead.X == f.X && newHead.Y == f.Y {
+					eatenIdx = i
+					break
+				}
+			}
+
+			if eatenIdx != -1 {
 				snake.Score++
-				h.spawnFood()
+				h.Foods = append(h.Foods[:eatenIdx], h.Foods[eatenIdx+1:]...)
 			} else {
-				snake.Body = snake.Body[:len(snake.Body)-1] // 沒吃到就縮尾巴
+				snake.Body = snake.Body[:len(snake.Body)-1]
 			}
 		}
 
-		// 2. 打包所有存活的蛇與狀態給前端
+		// ✨ 修正：只有在場上有玩家（蛇）的時候，才進行大自然生態運作
+		if len(h.Snakes) > 0 {
+			if len(h.Foods) < h.MaxFood && time.Now().After(h.NextFoodTime) {
+				h.spawnSingleFood() 
+
+				// ✨ 調整為更長的間隔
+				ratio := float64(len(h.Foods)) / float64(h.MaxFood)
+				// 基礎時間拉長到 2秒 ~ 10秒 (baseDelay + ratio * 8000)
+				baseDelay := 2000.0 + (ratio * 8000.0) 
+				randomOffset := rand.Intn(4000)       
+
+				totalDelayMs := time.Duration(baseDelay+float64(randomOffset)) * time.Millisecond
+				h.NextFoodTime = time.Now().Add(totalDelayMs)
+			}
+		} else {
+			// ✨ 如果沒人玩，把下次生成時間往後推，確保第一個玩家加進來時不會瞬間爆出一堆食物
+			h.NextFoodTime = time.Now().Add(2 * time.Second)
+		}
+
 		snakesData := make(map[string]interface{})
 		for c, snake := range h.Snakes {
-			snakesData[c.Name] = snake // 用玩家名字作為 key 傳給前端
+			snakesData[c.Name] = snake
 		}
 
 		payload := map[string]interface{}{
 			"snakes": snakesData,
-			"food":   h.Food,
+			"foods":  h.Foods,
 			"cols":   h.Cols,
 			"rows":   h.Rows,
 		}
-		h.Mu.Unlock() // 廣播前先解鎖，避免死鎖
+		h.Mu.Unlock()
 
-		// 3. 廣播世界狀態給所有連線者 (不管有沒有在玩都能觀戰)
 		h.Broadcast("game_update", payload)
 	}
 }

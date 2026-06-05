@@ -22,7 +22,6 @@ const gridCols = ref(0)
 const gridRows = ref(0)
 const isPlaying = ref(false)
 
-// ✨ 改為動態響應式的格子尺寸
 const tileSize = ref(22) 
 
 const initGrid = (cols: number, rows: number) => {
@@ -37,38 +36,30 @@ const initGrid = (cols: number, rows: number) => {
   return grid
 }
 
-// ✨ 核心修正：根據容器大小與伺服器規定的行列數，反推格子應該多大
 const calculateTileSize = () => {
   if (!showcaseRef.value || gridCols.value === 0 || gridRows.value === 0) return
   
-  // 取得展示區的可用長寬 (扣除上下左右各 16px 的 padding = 32px)
   const availableWidth = showcaseRef.value.clientWidth - 32
   const availableHeight = showcaseRef.value.clientHeight - 32
 
-  // 算出寬與高能容忍的最大格子尺寸 (-1 是因為 CSS grid gap 有 1px)
   const maxTileWidth = Math.floor(availableWidth / gridCols.value) - 1
   const maxTileHeight = Math.floor(availableHeight / gridRows.value) - 1
 
-  // 兩者取最小，確保長寬都不會超出邊界，並且最小不要小於 1px
   tileSize.value = Math.max(1, Math.min(maxTileWidth, maxTileHeight))
 }
 
 onMounted(() => {
   window.addEventListener('keydown', handleKeydown)
-  // ✨ 監聽視窗縮放，隨時重算格子大小
   window.addEventListener('resize', calculateTileSize) 
 
   onWS('game_update', (payload: any) => {
-    // 1. 同步伺服器規定的地圖大小
+    // 1. 同步伺服器地圖大小
     if (gridCols.value !== payload.cols || gridRows.value !== payload.rows) {
       gridCols.value = payload.cols
       gridRows.value = payload.rows
       gameGrid.value = initGrid(payload.cols, payload.rows)
       
-      // 地圖大小確定後，立刻計算一次格子尺寸
-      nextTick(() => {
-        calculateTileSize()
-      })
+      nextTick(() => { calculateTileSize() })
     }
 
     // 2. 清空畫布
@@ -80,9 +71,13 @@ onMounted(() => {
       }
     }
 
-    // 3. 畫出食物
-    if (payload.food.y >= 0 && payload.food.x >= 0) {
-      gameGrid.value[payload.food.y][payload.food.x].isFood = true
+    // ✨ 3. 畫出所有食物
+    if (payload.foods && Array.isArray(payload.foods)) {
+      payload.foods.forEach((f: any) => {
+        if (f.y >= 0 && f.y < gridRows.value && f.x >= 0 && f.x < gridCols.value) {
+          gameGrid.value[f.y][f.x].isFood = true
+        }
+      })
     }
 
     // 4. 畫出世界上的所有蛇
@@ -97,7 +92,7 @@ onMounted(() => {
       })
     }
 
-    // 5. 更新自己的分數與狀態
+    // 5. 更新狀態
     const mySnake = snakesMap[props.playerName]
     if (mySnake) {
       emit('update-score', mySnake.score)
@@ -120,8 +115,7 @@ onUnmounted(() => {
 
 const startGame = () => {
   if (isPlaying.value) return
-  // ✨ 後端已經綁定了 Session 名稱，送出空的 payload 即可
-  sendWS('start_game', {})
+  sendWS('start_game', { name: props.playerName })
 }
 
 const handleKeydown = (e: KeyboardEvent) => {
