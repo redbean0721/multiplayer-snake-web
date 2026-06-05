@@ -1,5 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { connectWS, sendWS, onWS } from './services/websocket'
+import ChatRoom from './components/ChatRoom.vue'
+import SnakeGame from './components/SnakeGame.vue'
 
 type Message = {
   id: number
@@ -8,11 +11,11 @@ type Message = {
   time: string
 }
 
+// 玩家與房間狀態
 const playerName = ref('redbean0721')
 const isInMatch = ref(true)
-const latencyMs = ref(32)
-
 const activeRoomName = computed(() => (isInMatch.value ? '私人房間 ALPHA-23' : '全伺服器聊天'))
+const currentScore = ref(0)
 
 const messages = ref<Message[]>([
   { id: 1, user: '系統', content: '歡迎來到多人貪吃蛇競技場。', time: '01:15' },
@@ -20,24 +23,14 @@ const messages = ref<Message[]>([
   { id: 3, user: 'ayfp7g', content: '上一場打得很漂亮。', time: '01:16' },
 ])
 
-let latencyTimer: number | undefined
-
-onMounted(() => {
-  latencyTimer = window.setInterval(() => {
-    const drift = Math.floor(Math.random() * 9) - 4
-    latencyMs.value = Math.max(12, Math.min(150, latencyMs.value + drift))
-  }, 1400)
-})
-
-onUnmounted(() => {
-  if (latencyTimer) {
-    window.clearInterval(latencyTimer)
-  }
-})
+// 網路真實延遲計算
+const latencyMs = ref(0)
+let pingInterval: number | undefined
 
 const latencyLevel = computed<'good' | 'mid' | 'bad'>(() => {
+  if (latencyMs.value === 0) return 'mid'
   if (latencyMs.value < 50) return 'good'
-  if (latencyMs.value < 95) return 'mid'
+  if (latencyMs.value < 120) return 'mid'
   return 'bad'
 })
 
@@ -49,9 +42,27 @@ const signalBars = computed(() => {
 })
 
 const latencyLabel = computed(() => {
+  if (latencyMs.value === 0) return '連接中'
   if (latencyLevel.value === 'good') return '穩定'
   if (latencyLevel.value === 'mid') return '普通'
   return '偏高'
+})
+
+onMounted(() => {
+  connectWS()
+
+  onWS('ping', (payload: any) => {
+    const serverTime = payload.time
+    latencyMs.value = Date.now() - serverTime
+  })
+
+  pingInterval = window.setInterval(() => {
+    sendWS('ping', { time: Date.now() })
+  }, 1500)
+})
+
+onUnmounted(() => {
+  if (pingInterval) clearInterval(pingInterval)
 })
 </script>
 
@@ -92,38 +103,21 @@ const latencyLabel = computed(() => {
 
       <div class="content">
         <section class="center-panel">
-          <div class="room-hint">{{ activeRoomName }}</div>
+          
+          <div class="panel-top-bar">
+            <div class="room-hint">{{ activeRoomName }}</div>
+            <div class="score-wrap">
+              <div class="score-board">🍎 分數：<span>{{ currentScore }}</span></div>
+            </div>
+          </div>
 
           <div class="hero-area">
-            <aside class="chat-mini">
-              <ul>
-                <li v-for="item in messages" :key="item.id">
-                  <span>{{ item.user }}：{{ item.content }}</span>
-                  <time>{{ item.time }}</time>
-                </li>
-              </ul>
-              <div class="chat-input-wrap">
-                <input type="text" placeholder="聊天（Demo）" disabled />
-                <button disabled>送出</button>
-              </div>
-            </aside>
+            <ChatRoom :messages="messages" :player-name="playerName" />
 
-            <div class="play-area">
-              <div class="snake-showcase">
-                <span class="snake-part s1"></span>
-                <span class="snake-part s2"></span>
-                <span class="snake-part s3"></span>
-                <span class="snake-head"></span>
-              </div>
-
-              <div class="bottom-actions">
-                <button class="secondary">商店</button>
-                <button class="secondary">圖鑑</button>
-                <button class="start" @click="isInMatch = !isInMatch">
-                  {{ isInMatch ? '開始遊戲（房間中）' : '開始遊戲' }}
-                </button>
-              </div>
-            </div>
+            <SnakeGame 
+              :is-in-match="isInMatch"
+              @update-score="currentScore = $event"
+            />
           </div>
         </section>
 

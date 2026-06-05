@@ -2,17 +2,18 @@ package main
 
 import (
 	"github.com/gin-gonic/gin"
-
 	"multiplayer-snake-web-backend/internal/handler"
-	chatrouter "multiplayer-snake-web-backend/internal/router/chat"
+	"multiplayer-snake-web-backend/internal/store"
 )
 
 func main() {
-	router := gin.Default()
-	chatHandler := handler.NewChatHandler()
+	r := gin.Default()
+	hub := store.NewHub() // 初始化 Hub
 
-	chatGroup := router.Group("/api/v1/chat")
-	chatrouter.RegisterRoutes(chatGroup, chatHandler)
+	// 統一入口
+	r.GET("/api/ws", func(c *gin.Context) {
+		handler.HandleWs(hub, c)
+	})
 
-	router.Run(":8080")
+	r.Run("10.0.0.110:8080")
 }
