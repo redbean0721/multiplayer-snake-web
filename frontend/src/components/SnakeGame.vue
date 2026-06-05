@@ -11,9 +11,10 @@ const emit = defineEmits<{
   (e: 'update-score', score: number): void
 }>()
 
+// ✨ 新增 foodType
 interface Tile {
   x: number; y: number
-  isSnake: boolean; isHead: boolean; isFood: boolean
+  isSnake: boolean; isHead: boolean; foodType: string
 }
 
 const showcaseRef = ref<HTMLElement | null>(null)
@@ -29,7 +30,7 @@ const initGrid = (cols: number, rows: number) => {
   for (let y = 0; y < rows; y++) {
     const row: Tile[] = []
     for (let x = 0; x < cols; x++) {
-      row.push({ x, y, isSnake: false, isHead: false, isFood: false })
+      row.push({ x, y, isSnake: false, isHead: false, foodType: '' })
     }
     grid.push(row)
   }
@@ -38,13 +39,10 @@ const initGrid = (cols: number, rows: number) => {
 
 const calculateTileSize = () => {
   if (!showcaseRef.value || gridCols.value === 0 || gridRows.value === 0) return
-  
   const availableWidth = showcaseRef.value.clientWidth - 32
   const availableHeight = showcaseRef.value.clientHeight - 32
-
   const maxTileWidth = Math.floor(availableWidth / gridCols.value) - 1
   const maxTileHeight = Math.floor(availableHeight / gridRows.value) - 1
-
   tileSize.value = Math.max(1, Math.min(maxTileWidth, maxTileHeight))
 }
 
@@ -53,34 +51,32 @@ onMounted(() => {
   window.addEventListener('resize', calculateTileSize) 
 
   onWS('game_update', (payload: any) => {
-    // 1. 同步伺服器地圖大小
     if (gridCols.value !== payload.cols || gridRows.value !== payload.rows) {
       gridCols.value = payload.cols
       gridRows.value = payload.rows
       gameGrid.value = initGrid(payload.cols, payload.rows)
-      
       nextTick(() => { calculateTileSize() })
     }
 
-    // 2. 清空畫布
+    // 清空畫布
     for (let y = 0; y < gridRows.value; y++) {
       for (let x = 0; x < gridCols.value; x++) {
         gameGrid.value[y][x].isSnake = false
         gameGrid.value[y][x].isHead = false
-        gameGrid.value[y][x].isFood = false
+        gameGrid.value[y][x].foodType = ''
       }
     }
 
-    // ✨ 3. 畫出所有食物
+    // ✨ 畫出包含類型的食物
     if (payload.foods && Array.isArray(payload.foods)) {
       payload.foods.forEach((f: any) => {
         if (f.y >= 0 && f.y < gridRows.value && f.x >= 0 && f.x < gridCols.value) {
-          gameGrid.value[f.y][f.x].isFood = true
+          gameGrid.value[f.y][f.x].foodType = f.type // 寫入 apple 或 star
         }
       })
     }
 
-    // 4. 畫出世界上的所有蛇
+    // 畫出蛇
     const snakesMap = payload.snakes
     for (const key in snakesMap) {
       const snake = snakesMap[key]
@@ -92,7 +88,6 @@ onMounted(() => {
       })
     }
 
-    // 5. 更新狀態
     const mySnake = snakesMap[props.playerName]
     if (mySnake) {
       emit('update-score', mySnake.score)
@@ -104,7 +99,7 @@ onMounted(() => {
 
   onWS('game_over', (payload: any) => {
     isPlaying.value = false
-    alert(`遊戲結束！你這次的得分是：${payload.score}`)
+    alert(`遊戲結束！\n🍎 最終得分：${payload.score}\n🪙 獲得金幣：${payload.coins}`)
   })
 })
 
@@ -115,7 +110,7 @@ onUnmounted(() => {
 
 const startGame = () => {
   if (isPlaying.value) return
-  sendWS('start_game', { name: props.playerName })
+  sendWS('start_game', {})
 }
 
 const handleKeydown = (e: KeyboardEvent) => {
@@ -131,7 +126,6 @@ const handleKeydown = (e: KeyboardEvent) => {
     case 'ArrowRight': case 'd': case 'D': x = 1; y = 0; break
     default: return
   }
-
   sendWS('move', { x, y })
 }
 </script>
@@ -149,7 +143,12 @@ const handleKeydown = (e: KeyboardEvent) => {
             v-for="(tile, x) in row"
             :key="'tile-' + x + '-' + y"
             class="tile"
-            :class="{ 'snake': tile.isSnake, 'head': tile.isHead, 'food': tile.isFood }"
+            :class="{ 
+              'snake': tile.isSnake, 
+              'head': tile.isHead, 
+              'apple': tile.foodType === 'apple',
+              'star': tile.foodType === 'star'
+            }"
           ></div>
         </template>
       </div>

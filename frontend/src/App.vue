@@ -1,27 +1,26 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { connectWS, sendWS, onWS } from './services/websocket'
+// ✨ 記得引入 disconnectWS
+import { connectWS, sendWS, onWS, disconnectWS } from './services/websocket'
 import ChatRoom from './components/ChatRoom.vue'
 import SnakeGame from './components/SnakeGame.vue'
 
-// ==========================================
-// 1. 登入系統與狀態保存邏輯
-// ==========================================
 const isLoggedIn = ref(false)
 const guestNameInput = ref('')
 const playerName = ref('')
 
+const userCoins = ref(0)
+const userStars = ref(0)
+const userDiamonds = ref(0)
+
 const loginAsGuest = async () => {
-  if (!guestNameInput.value.trim()) {
-    alert('請輸入使用者名稱！')
-    return
-  }
+  if (!guestNameInput.value.trim()) return alert('請輸入使用者名稱！')
 
   try {
     const res = await fetch('http://10.0.0.110:8080/api/login/guest', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      credentials: 'include', // ✨ 允許接收並發送 HttpOnly Cookie
+      credentials: 'include',
       body: JSON.stringify({ username: guestNameInput.value.trim() })
     })
     
@@ -29,31 +28,46 @@ const loginAsGuest = async () => {
     if (res.ok) {
       playerName.value = data.username
       isLoggedIn.value = true
-      
-      // ✨ 存在 localStorage，下次重整就不會斷線了
       localStorage.setItem('game_token', data.token)
       localStorage.setItem('game_username', data.username)
-      
       initGameConnection(data.token)
     } else {
       alert(data.error || '登入失敗')
     }
   } catch (error) {
-    console.error(error)
-    alert('無法連線到伺服器，請確認後端是否正在運行。')
+    alert('無法連線到伺服器。')
   }
 }
 
-// ✨ 登出功能
-const logout = () => {
+// ✨ 完美登出邏輯
+const logout = async () => {
+  try {
+    // 1. 呼叫後端 API 清除 Cookie 與 Session
+    await fetch('http://10.0.0.110:8080/api/logout', {
+      method: 'POST',
+      credentials: 'include'
+    })
+  } catch (e) {
+    console.error('登出 API 呼叫失敗', e)
+  }
+
+  // 2. 清除前端本地資料
   localStorage.removeItem('game_token')
   localStorage.removeItem('game_username')
-  location.reload()
+
+  // 3. 關閉 WebSocket 與計時器
+  disconnectWS()
+  if (pingInterval) {
+    clearInterval(pingInterval)
+    pingInterval = undefined
+  }
+  latencyMs.value = 0
+
+  // 4. 重置狀態，Vue 會自動轉跳回登入畫面 (不用 reload)
+  playerName.value = ''
+  isLoggedIn.value = false
 }
 
-// ==========================================
-// 2. 遊戲大廳狀態邏輯
-// ==========================================
 type Message = { id: number; user: string; content: string; time: string }
 
 const isInMatch = ref(true)
@@ -86,17 +100,18 @@ const latencyLabel = computed(() => {
 const initGameConnection = (token: string) => {
   connectWS(token)
 
-  onWS('ping', (payload: any) => {
-    latencyMs.value = Date.now() - payload.time
+  onWS('ping', (payload: any) => { latencyMs.value = Date.now() - payload.time })
+  
+  onWS('resource_update', (payload: any) => {
+    userCoins.value = payload.coins
+    userStars.value = payload.stars
+    userDiamonds.value = payload.diamonds
   })
 
-  pingInterval = window.setInterval(() => {
-    sendWS('ping', { time: Date.now() })
-  }, 1500)
+  pingInterval = window.setInterval(() => { sendWS('ping', { time: Date.now() }) }, 1500)
 }
 
 onMounted(() => {
-  // ✨ 網頁載入時，自動檢查是否登入過
   const savedToken = localStorage.getItem('game_token')
   const savedUsername = localStorage.getItem('game_username')
   
@@ -107,34 +122,17 @@ onMounted(() => {
   }
 })
 
-onUnmounted(() => {
-  if (pingInterval) clearInterval(pingInterval)
-})
+onUnmounted(() => { if (pingInterval) clearInterval(pingInterval) })
 </script>
 
 <template>
   <div v-if="!isLoggedIn" class="login-screen">
     <div class="login-card">
-      <div class="login-header">
-        <h1>🐍 貪吃蛇大亂鬥</h1>
-        <p>請輸入您的玩家名稱以進入競技場</p>
-      </div>
-
-      <input 
-        type="text" 
-        v-model="guestNameInput" 
-        placeholder="例如：redbean0721" 
-        @keyup.enter="loginAsGuest"
-        maxlength="16"
-      />
-      
+      <div class="login-header"><h1>🐍 貪吃蛇大亂鬥</h1><p>請輸入您的玩家名稱以進入競技場</p></div>
+      <input type="text" v-model="guestNameInput" placeholder="例如：redbean0721" @keyup.enter="loginAsGuest" maxlength="16" />
       <button class="pill sign" @click="loginAsGuest">訪客遊玩</button>
-      
       <div class="divider"><span>或者</span></div>
-      
-      <button class="pill discord" disabled>
-        Discord 登入 (開發中)
-      </button>
+      <button class="pill discord" disabled>Discord 登入 (開發中)</button>
     </div>
   </div>
 
@@ -154,18 +152,15 @@ onUnmounted(() => {
       <header class="topbar">
         <div class="player-chip">
           <div class="avatar">🐍</div>
-          <div>
-            <p class="name">{{ playerName }}</p>
-            <p class="sub">Lv.1</p>
-          </div>
+          <div><p class="name">{{ playerName }}</p><p class="sub">Lv.1</p></div>
         </div>
 
         <button class="pill sign" @click="logout">登出</button>
 
         <div class="topbar-tools">
-          <button class="pill resource">💎 0</button>
-          <button class="pill resource">⭐ 0</button>
-          <button class="pill resource coin">🪙 0</button>
+          <button class="pill resource">💎 {{ userDiamonds }}</button>
+          <button class="pill resource">⭐ {{ userStars }}</button>
+          <button class="pill resource coin">🪙 {{ userCoins }}</button>
           <button class="pill task">任務</button>
         </div>
 
@@ -176,26 +171,14 @@ onUnmounted(() => {
         <section class="center-panel">
           <div class="panel-top-bar">
             <div class="room-hint">{{ activeRoomName }}</div>
-            <div class="score-wrap">
-              <div class="score-board">🍎 分數：<span>{{ currentScore }}</span></div>
-            </div>
+            <div class="score-wrap"><div class="score-board">🍎 分數：<span>{{ currentScore }}</span></div></div>
           </div>
-
           <div class="hero-area">
             <ChatRoom :messages="messages" :player-name="playerName" />
-
-            <SnakeGame 
-              :is-in-match="isInMatch"
-              :player-name="playerName" 
-              @update-score="currentScore = $event"
-            />
+            <SnakeGame :is-in-match="isInMatch" :player-name="playerName" @update-score="currentScore = $event" />
           </div>
         </section>
-
-        <aside class="side right">
-          <button>好友</button>
-          <button>排名</button>
-        </aside>
+        <aside class="side right"><button>好友</button><button>排名</button></aside>
       </div>
     </div>
   </div>

@@ -2,7 +2,6 @@ let socket: WebSocket | null = null;
 const listeners = new Map<string, (payload: any) => void>();
 
 export const connectWS = (token: string) => {
-  // 將 Token 帶在網址後面傳給後端
   const WS_URL = `ws://10.0.0.110:8080/api/ws?token=${token}`;
   socket = new WebSocket(WS_URL);
   
@@ -22,4 +21,13 @@ export const sendWS = (type: string, payload: any) => {
 
 export const onWS = (type: string, callback: (payload: any) => void) => {
   listeners.set(type, callback);
+};
+
+// ✨ 新增：登出時主動關閉連線並清理監聽器
+export const disconnectWS = () => {
+  if (socket) {
+    socket.close();
+    socket = null;
+  }
+  listeners.clear();
 };

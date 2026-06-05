@@ -21,7 +21,6 @@ func NewSessionManager() *SessionManager {
 	}
 }
 
-// 建立新 Session 並回傳 Token
 func (s *SessionManager) CreateSession(userID uint, username string) string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -34,11 +33,17 @@ func (s *SessionManager) CreateSession(userID uint, username string) string {
 	return token
 }
 
-// 驗證 Token 是否有效
 func (s *SessionManager) GetSession(token string) (SessionData, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	
 	data, exists := s.sessions[token]
 	return data, exists
+}
+
+// ✨ 新增：登出時銷毀伺服器記憶體中的 Session
+func (s *SessionManager) DeleteSession(token string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.sessions, token)
 }

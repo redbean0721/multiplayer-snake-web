@@ -291,8 +291,24 @@ body {
   background: purple;
 }
 
-.tile.food {
-  background: red;
+/* 刪除原本的 .tile.food，改為以下 */
+.tile.apple {
+  background: #ef4444; /* 蘋果的紅色 */
+  border-radius: 50%;  /* 變成圓形 */
+  transform: scale(0.85); /* 稍微縮小一點比較可愛 */
+}
+
+.tile.star {
+  background: #f7b731; /* 星星的黃色 */
+  border-radius: 20%; 
+  transform: rotate(45deg) scale(0.9); /* 轉 45 度看起來像菱形/星星 */
+  box-shadow: 0 0 8px #f7b731; /* 加上發光效果！ */
+  animation: pulse-star 1s infinite alternate; /* 閃爍動畫 */
+}
+
+@keyframes pulse-star {
+  0% { transform: rotate(45deg) scale(0.8); opacity: 0.8; }
+  100% { transform: rotate(45deg) scale(1.1); opacity: 1; }
 }
 
 .chat-mini {
