@@ -195,10 +195,8 @@ body {
   gap: 10px;
 }
 
-/* ====== ✨ 修改：與下方的 Hero Area 採用相同的網格比例 ====== */
 .panel-top-bar {
   display: grid;
-  /* 320px 對齊聊天室，1fr 對齊遊戲區，完美無瑕！ */
   grid-template-columns: 320px 1fr;
   gap: 12px;
   align-items: center;
@@ -212,7 +210,6 @@ body {
   margin: 0;
 }
 
-/* 用來讓分數在 1fr 空間（也就是遊戲區上方）裡面置中的容器 */
 .score-wrap {
   display: flex;
   justify-content: center;
@@ -236,7 +233,6 @@ body {
   font-size: 18px;
   font-weight: 800;
 }
-/* ==================================== */
 
 .hero-area {
   flex: 1;
@@ -247,10 +243,12 @@ body {
   align-items: stretch;
 }
 
+/* ====== ✨ 修正開始：加入 min-width: 0 確保它能被縮小 ====== */
 .play-area {
   display: flex;
   flex-direction: column;
   min-height: 0;
+  min-width: 0; /* 關鍵修復 */
   gap: 10px;
 }
 
@@ -261,8 +259,10 @@ body {
   padding: 16px;
   flex: 1;
   min-height: 0;
+  min-width: 0; /* 關鍵修復 */
   overflow: hidden;
 }
+/* ====== ✨ 修正結束 ====== */
 
 .snake-grid {
   display: grid;
@@ -470,7 +470,6 @@ body {
     grid-template-columns: 1fr 90px;
   }
 
-  /* 螢幕太小時，把網格變成單行，確保不會跑版 */
   .hero-area, .panel-top-bar {
     grid-template-columns: 1fr;
   }
@@ -516,4 +515,88 @@ body {
     min-width: 0;
     flex: none;
   }
+}
+
+/* ====== ✨ 登入畫面樣式 ====== */
+.login-screen {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100svh;
+  padding: 20px;
+}
+
+.login-card {
+  background: var(--panel-strong);
+  backdrop-filter: blur(10px);
+  padding: 40px;
+  border-radius: 26px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+  max-width: 420px;
+  text-align: center;
+}
+
+.login-header h1 {
+  margin: 0 0 8px 0;
+  color: var(--text);
+  font-size: 28px;
+}
+
+.login-header p {
+  margin: 0;
+  color: var(--sub);
+  font-size: 15px;
+}
+
+.login-card input {
+  padding: 16px;
+  border-radius: 14px;
+  border: 2px solid #c0d5ec;
+  font-size: 18px;
+  font-family: 'Noto Sans TC', sans-serif;
+  text-align: center;
+  outline: none;
+  transition: border-color 0.2s;
+  background: rgba(255, 255, 255, 0.8);
+}
+
+.login-card input:focus {
+  border-color: #7f85ff;
+}
+
+.divider {
+  position: relative;
+  text-align: center;
+  margin: 10px 0;
+}
+
+.divider::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: #c0d5ec;
+  z-index: 1;
+}
+
+.divider span {
+  position: relative;
+  z-index: 2;
+  background: #ebf3f9; /* 配合背景稍微調整 */
+  padding: 0 12px;
+  color: var(--sub);
+  font-size: 14px;
+}
+
+.pill.discord {
+  background: #5865F2; /* Discord 品牌色 */
+  color: white;
+  opacity: 0.6;
+  cursor: not-allowed;
 }

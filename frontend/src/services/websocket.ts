@@ -1,9 +1,9 @@
-// src/services/websocket.ts
-const WS_URL = 'ws://10.0.0.110:8080/api/ws';
 let socket: WebSocket | null = null;
 const listeners = new Map<string, (payload: any) => void>();
 
-export const connectWS = () => {
+export const connectWS = (token: string) => {
+  // 將 Token 帶在網址後面傳給後端
+  const WS_URL = `ws://10.0.0.110:8080/api/ws?token=${token}`;
   socket = new WebSocket(WS_URL);
   
   socket.onmessage = (event) => {

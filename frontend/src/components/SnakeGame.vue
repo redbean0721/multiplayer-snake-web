@@ -1,16 +1,15 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted, nextTick } from 'vue'
 import { sendWS, onWS } from '../services/websocket'
 
 const props = defineProps<{
-  isInMatch: boolean
+  isInMatch: boolean,
+  playerName: string
 }>()
 
 const emit = defineEmits<{
   (e: 'update-score', score: number): void
 }>()
-
-const TILE_SIZE = 22
 
 interface Tile {
   x: number; y: number
@@ -21,12 +20,10 @@ const showcaseRef = ref<HTMLElement | null>(null)
 const gameGrid = ref<Tile[][]>([])
 const gridCols = ref(0)
 const gridRows = ref(0)
-
 const isPlaying = ref(false)
 
-// 這些資料現在完全由伺服器派發
-const snake = ref<{ x: number; y: number }[]>([])
-const food = ref<{ x: number; y: number }>({ x: -1, y: -1 })
+// ✨ 改為動態響應式的格子尺寸
+const tileSize = ref(22) 
 
 const initGrid = (cols: number, rows: number) => {
   const grid: Tile[][] = []
@@ -40,59 +37,76 @@ const initGrid = (cols: number, rows: number) => {
   return grid
 }
 
-// 根據伺服器傳來的蛇與食物資料來渲染
-const renderGrid = () => {
-  if (gridCols.value === 0 || gridRows.value === 0) return
-  for (let y = 0; y < gridRows.value; y++) {
-    for (let x = 0; x < gridCols.value; x++) {
-      gameGrid.value[y][x].isSnake = false
-      gameGrid.value[y][x].isHead = false
-      gameGrid.value[y][x].isFood = false
-    }
-  }
-  if (food.value.y >= 0 && food.value.y < gridRows.value && food.value.x >= 0 && food.value.x < gridCols.value) {
-    gameGrid.value[food.value.y][food.value.x].isFood = true
-  }
-  snake.value.forEach((segment, index) => {
-    if (segment.y >= 0 && segment.y < gridRows.value && segment.x >= 0 && segment.x < gridCols.value) {
-      gameGrid.value[segment.y][segment.x].isSnake = true
-      if (index === 0) gameGrid.value[segment.y][segment.x].isHead = true
-    }
-  })
-}
-
-const calculateGrid = () => {
-  if (!showcaseRef.value) return
+// ✨ 核心修正：根據容器大小與伺服器規定的行列數，反推格子應該多大
+const calculateTileSize = () => {
+  if (!showcaseRef.value || gridCols.value === 0 || gridRows.value === 0) return
+  
+  // 取得展示區的可用長寬 (扣除上下左右各 16px 的 padding = 32px)
   const availableWidth = showcaseRef.value.clientWidth - 32
   const availableHeight = showcaseRef.value.clientHeight - 32
-  const unitSize = TILE_SIZE + 1
-  const cols = Math.floor(availableWidth / unitSize)
-  const rows = Math.floor(availableHeight / unitSize)
 
-  if (cols !== gridCols.value || rows !== gridRows.value) {
-    gridCols.value = cols
-    gridRows.value = rows
-    gameGrid.value = initGrid(cols, rows)
-    renderGrid()
-  }
+  // 算出寬與高能容忍的最大格子尺寸 (-1 是因為 CSS grid gap 有 1px)
+  const maxTileWidth = Math.floor(availableWidth / gridCols.value) - 1
+  const maxTileHeight = Math.floor(availableHeight / gridRows.value) - 1
+
+  // 兩者取最小，確保長寬都不會超出邊界，並且最小不要小於 1px
+  tileSize.value = Math.max(1, Math.min(maxTileWidth, maxTileHeight))
 }
 
-// 接收來自伺服器的指令
 onMounted(() => {
-  calculateGrid()
-  window.addEventListener('resize', calculateGrid)
   window.addEventListener('keydown', handleKeydown)
+  // ✨ 監聽視窗縮放，隨時重算格子大小
+  window.addEventListener('resize', calculateTileSize) 
 
-  // ✨ 接收遊戲更新
   onWS('game_update', (payload: any) => {
-    snake.value = payload.snake
-    food.value = payload.food
-    emit('update-score', payload.score)
-    isPlaying.value = true
-    renderGrid()
+    // 1. 同步伺服器規定的地圖大小
+    if (gridCols.value !== payload.cols || gridRows.value !== payload.rows) {
+      gridCols.value = payload.cols
+      gridRows.value = payload.rows
+      gameGrid.value = initGrid(payload.cols, payload.rows)
+      
+      // 地圖大小確定後，立刻計算一次格子尺寸
+      nextTick(() => {
+        calculateTileSize()
+      })
+    }
+
+    // 2. 清空畫布
+    for (let y = 0; y < gridRows.value; y++) {
+      for (let x = 0; x < gridCols.value; x++) {
+        gameGrid.value[y][x].isSnake = false
+        gameGrid.value[y][x].isHead = false
+        gameGrid.value[y][x].isFood = false
+      }
+    }
+
+    // 3. 畫出食物
+    if (payload.food.y >= 0 && payload.food.x >= 0) {
+      gameGrid.value[payload.food.y][payload.food.x].isFood = true
+    }
+
+    // 4. 畫出世界上的所有蛇
+    const snakesMap = payload.snakes
+    for (const key in snakesMap) {
+      const snake = snakesMap[key]
+      snake.body.forEach((segment: any, index: number) => {
+        if (segment.y >= 0 && segment.y < gridRows.value && segment.x >= 0 && segment.x < gridCols.value) {
+          gameGrid.value[segment.y][segment.x].isSnake = true
+          if (index === 0) gameGrid.value[segment.y][segment.x].isHead = true
+        }
+      })
+    }
+
+    // 5. 更新自己的分數與狀態
+    const mySnake = snakesMap[props.playerName]
+    if (mySnake) {
+      emit('update-score', mySnake.score)
+      isPlaying.value = true
+    } else {
+      isPlaying.value = false 
+    }
   })
 
-  // ✨ 接收遊戲結束
   onWS('game_over', (payload: any) => {
     isPlaying.value = false
     alert(`遊戲結束！你這次的得分是：${payload.score}`)
@@ -100,16 +114,14 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
-  window.removeEventListener('resize', calculateGrid)
   window.removeEventListener('keydown', handleKeydown)
+  window.removeEventListener('resize', calculateTileSize)
 })
 
 const startGame = () => {
   if (isPlaying.value) return
-  if (gridCols.value < 5 || gridRows.value < 5) return alert('視窗太小啦，請放大視窗！')
-
-  // 將開始遊戲的請求與現在的網格大小告訴伺服器
-  sendWS('start_game', { cols: gridCols.value, rows: gridRows.value })
+  // ✨ 後端已經綁定了 Session 名稱，送出空的 payload 即可
+  sendWS('start_game', {})
 }
 
 const handleKeydown = (e: KeyboardEvent) => {
@@ -126,7 +138,6 @@ const handleKeydown = (e: KeyboardEvent) => {
     default: return
   }
 
-  // ✨ 將按鍵轉為方向，直接丟給伺服器
   sendWS('move', { x, y })
 }
 </script>
@@ -137,7 +148,7 @@ const handleKeydown = (e: KeyboardEvent) => {
       <div 
         v-if="gameGrid.length > 0" 
         class="snake-grid" 
-        :style="{ '--cols': gridCols, '--rows': gridRows, '--tile-size': TILE_SIZE + 'px' }"
+        :style="{ '--cols': gridCols, '--rows': gridRows, '--tile-size': tileSize + 'px' }"
       >
         <template v-for="(row, y) in gameGrid" :key="'row-' + y">
           <div
