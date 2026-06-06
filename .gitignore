@@ -37,3 +37,4 @@ yarn-error.log
 test/
 
 *.db
+__pycache__/
