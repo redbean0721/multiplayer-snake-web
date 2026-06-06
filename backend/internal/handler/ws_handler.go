@@ -43,7 +43,6 @@ func HandleWs(hub *store.Hub, sm *store.SessionManager, c *gin.Context) {
 	hub.Register(client)
 	hub.SyncResources(client)
 	
-	// 1. 發送歷史紀錄
 	var messages []models.Message
 	hub.DB.Order("created_at desc").Limit(30).Find(&messages)
 
@@ -58,7 +57,6 @@ func HandleWs(hub *store.Hub, sm *store.SessionManager, c *gin.Context) {
 	}
 	client.SendJSON("chat_history", history)
 
-	// ✨ 2. 廣播系統訊息：告訴所有人這個玩家進來了 (包含自己，但不寫入 DB)
 	sysJoinMsg := ChatPayload{
 		ID:      time.Now().UnixNano(),
 		User:    "系統",
@@ -67,7 +65,6 @@ func HandleWs(hub *store.Hub, sm *store.SessionManager, c *gin.Context) {
 	}
 	hub.Broadcast("chat", sysJoinMsg)
 
-	// ✨ 3. 確保玩家離線時廣播離開訊息，並註銷連線
 	defer func() {
 		sysLeaveMsg := ChatPayload{
 			ID:      time.Now().UnixNano(),
@@ -76,7 +73,6 @@ func HandleWs(hub *store.Hub, sm *store.SessionManager, c *gin.Context) {
 			Time:    time.Now().Format("15:04"),
 		}
 		hub.Broadcast("chat", sysLeaveMsg)
-		
 		hub.Unregister(client)
 	}()
 
@@ -114,6 +110,10 @@ func HandleWs(hub *store.Hub, sm *store.SessionManager, c *gin.Context) {
 			if err := json.Unmarshal(wsMsg.Payload, &m); err == nil {
 				hub.ChangeDirection(client, m.X, m.Y)
 			}
+			
+		// ✨ 新增：前端要求更新資源時，立刻推送最新的錢包狀態
+		case "sync_resources":
+			hub.SyncResources(client)
 		}
 	}
 }

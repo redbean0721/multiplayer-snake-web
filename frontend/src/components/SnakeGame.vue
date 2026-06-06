@@ -7,8 +7,10 @@ const props = defineProps<{
   playerName: string
 }>()
 
+// ✨ 新增 open-pokedex 的事件宣告
 const emit = defineEmits<{
   (e: 'update-score', score: number): void
+  (e: 'open-pokedex'): void 
 }>()
 
 interface Tile {
@@ -24,7 +26,6 @@ const isPlaying = ref(false)
 
 const tileSize = ref(22) 
 
-// ✨ 用來儲存排行榜前 5 名
 const topPlayers = ref<{ name: string; score: number }[]>([])
 
 const initGrid = (cols: number, rows: number) => {
@@ -76,7 +77,6 @@ onMounted(() => {
       })
     }
 
-    // ✨ 收集玩家來排排行榜
     const snakesMap = payload.snakes
     const currentPlayers: { name: string; score: number }[] = []
 
@@ -92,7 +92,6 @@ onMounted(() => {
       })
     }
 
-    // ✨ 排出前五名
     currentPlayers.sort((a, b) => b.score - a.score)
     topPlayers.value = currentPlayers.slice(0, 5)
 
@@ -176,7 +175,7 @@ const handleKeydown = (e: KeyboardEvent) => {
 
     <div class="bottom-actions">
       <button class="secondary">商店</button>
-      <button class="secondary">圖鑑</button>
+      <button class="secondary" @click="emit('open-pokedex')">圖鑑</button>
       <button 
         class="start" 
         @click="startGame"

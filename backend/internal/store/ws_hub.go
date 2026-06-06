@@ -37,6 +37,10 @@ type Snake struct {
 	Score      int     `json:"score"`
 	BoostSteps int     `json:"-"`
 	TickCount  int     `json:"-"`
+	
+	// ✨ 新增局內任務進度快取
+	SessionApples int `json:"-"`
+	SessionKills  int `json:"-"`
 }
 
 type Hub struct {
@@ -108,7 +112,15 @@ func (h *Hub) Register(c *Client) {
 
 func (h *Hub) Unregister(c *Client) {
 	h.Mu.Lock()
-	if _, ok := h.Clients[c]; ok { delete(h.Clients, c); delete(h.Snakes, c); c.Conn.Close() }
+	// ✨ 玩家若直接關閉網頁斷線，也要結算他的任務進度
+	if snake, ok := h.Snakes[c]; ok {
+		h.DB.Model(&models.User{}).Where("username = ?", c.Name).Updates(map[string]interface{}{
+			"daily_apples": gorm.Expr("daily_apples + ?", snake.SessionApples),
+			"daily_kills":  gorm.Expr("daily_kills + ?", snake.SessionKills),
+		})
+		delete(h.Snakes, c)
+	}
+	if _, ok := h.Clients[c]; ok { delete(h.Clients, c); c.Conn.Close() }
 	h.Mu.Unlock()
 }
 
@@ -125,9 +137,9 @@ func (h *Hub) SpawnSnake(c *Client) {
 	startY := h.Rows/2 + rand.Intn(10) - 5
 	h.Snakes[c] = &Snake{
 		Body:       []Point{{X: startX, Y: startY}, {X: startX - 1, Y: startY}, {X: startX - 2, Y: startY}},
-		Dir:        Point{X: 1, Y: 0},
-		NextDir:    Point{X: 1, Y: 0},
+		Dir:        Point{X: 1, Y: 0}, NextDir: Point{X: 1, Y: 0},
 		Score:      0, BoostSteps: 0, TickCount: 0,
+		SessionApples: 0, SessionKills: 0, // ✨ 初始化
 	}
 }
 
@@ -177,7 +189,11 @@ func (h *Hub) RunGameEngine() {
 				for _, s := range otherSnake.Body {
 					if s.X == newHead.X && s.Y == newHead.Y {
 						collision = true
-						if otherClient != c { killer = otherClient }
+						if otherClient != c { 
+							killer = otherClient 
+							// ✨ 給凶手增加擊殺數
+							otherSnake.SessionKills++
+						}
 						break
 					}
 				}
@@ -205,6 +221,7 @@ func (h *Hub) RunGameEngine() {
 					snake.Score += 5; snake.BoostSteps += 30
 				} else {
 					snake.Score += 1
+					snake.SessionApples++ // ✨ 增加蘋果食用數
 				}
 
 				if prevScore/5 < snake.Score/5 {
@@ -239,14 +256,17 @@ func (h *Hub) RunGameEngine() {
 func (h *Hub) handleDeath(deadClient *Client, deadSnake *Snake, killer *Client) {
 	coinsEarned := deadSnake.Score * 10
 	
-	// ✨ 結算時同時判斷並更新 HighestScore
 	var user models.User
 	if err := h.DB.Where("username = ?", deadClient.Name).First(&user).Error; err == nil {
 		user.Coins += coinsEarned
-		if deadSnake.Score > user.HighestScore {
-			user.HighestScore = deadSnake.Score
-		}
-		h.DB.Save(&user) // 存回 DB
+		if deadSnake.Score > user.HighestScore { user.HighestScore = deadSnake.Score }
+		h.DB.Save(&user) 
+		
+		// ✨ 死亡時儲存任務進度
+		h.DB.Model(&user).Updates(map[string]interface{}{
+			"daily_apples": gorm.Expr("daily_apples + ?", deadSnake.SessionApples),
+			"daily_kills":  gorm.Expr("daily_kills + ?", deadSnake.SessionKills),
+		})
 	}
 
 	if killer != nil {

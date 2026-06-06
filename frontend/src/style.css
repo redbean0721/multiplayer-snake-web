@@ -807,3 +807,214 @@ body {
 }
 
 .close-btn:hover { background: #d0dded; }
+
+/* ====== ✨ 好友系統特有樣式 ====== */
+.add-friend-wrap {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.add-friend-wrap input {
+  flex: 1;
+  padding: 12px 16px;
+  border-radius: 12px;
+  border: 2px solid #c0d5ec;
+  outline: none;
+  font-family: 'Noto Sans TC', sans-serif;
+  font-size: 15px;
+  transition: border-color 0.2s;
+}
+
+.add-friend-wrap input:focus { border-color: #5ea2ff; }
+
+.add-friend-wrap button {
+  background: linear-gradient(120deg, #5ea2ff, #3f74db);
+  color: white;
+  border: none;
+  border-radius: 12px;
+  padding: 0 20px;
+  font-weight: bold;
+  cursor: pointer;
+  font-family: 'Noto Sans TC', sans-serif;
+  font-size: 15px;
+  transition: opacity 0.2s;
+}
+.add-friend-wrap button:hover { opacity: 0.9; }
+
+.modal-content h4 {
+  margin: 10px 0 0 0;
+  font-size: 15px;
+  color: #4b6c8e;
+  border-bottom: 2px dashed #e2eaf5;
+  padding-bottom: 6px;
+}
+
+.action-group {
+  display: flex;
+  gap: 8px;
+}
+
+.accept-btn {
+  background: #e2f5ec;
+  color: #22c55e;
+  border: none;
+  padding: 6px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: bold;
+  font-size: 13px;
+  transition: background 0.2s;
+}
+.accept-btn:hover { background: #ccf0db; }
+
+.reject-btn {
+  background: #f1f5f9;
+  color: #64748b;
+  border: none;
+  padding: 6px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: bold;
+  font-size: 13px;
+  transition: background 0.2s;
+}
+.reject-btn:hover { background: #e2e8f0; }
+
+.friend-list .remove-btn {
+  background: #ffe3e3;
+  color: #ef4444;
+  border: none;
+  padding: 6px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: bold;
+  font-size: 13px;
+  transition: background 0.2s;
+}
+.friend-list .remove-btn:hover { background: #ffcaca; }
+
+/* ====== ✨ 任務系統特有樣式 ====== */
+.task-list {
+  gap: 16px;
+}
+
+.task-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px !important;
+}
+
+.task-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.task-desc {
+  font-weight: 800;
+  color: var(--text);
+  font-size: 16px;
+}
+
+.task-reward {
+  font-size: 13px;
+  color: #ffae2d;
+  font-weight: bold;
+}
+
+.progress-bar-bg {
+  background: #e2eaf5;
+  height: 8px;
+  border-radius: 4px;
+  margin-top: 6px;
+  overflow: hidden;
+  width: 90%;
+}
+
+.progress-bar-fill {
+  background: var(--green);
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+.progress-text {
+  font-size: 12px;
+  color: #6f8cab;
+  margin-top: 2px;
+}
+
+.claim-glow {
+  box-shadow: 0 0 10px rgba(34, 197, 94, 0.5);
+  animation: pulse-green 1.5s infinite alternate;
+}
+
+@keyframes pulse-green {
+  0% { transform: scale(1); }
+  100% { transform: scale(1.05); }
+}
+
+/* ====== ✨ 圖鑑系統樣式 ====== */
+.pokedex-list li {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px;
+}
+
+.item-icon {
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 32px;
+}
+
+.apple-icon {
+  background: #ef4444;
+  border-radius: 50%;
+  box-shadow: inset -4px -4px 10px rgba(0,0,0,0.2);
+}
+
+.star-icon {
+  background: #f7b731;
+  border-radius: 20%;
+  transform: rotate(45deg);
+  box-shadow: 0 0 12px #f7b731;
+  animation: pulse-star 1s infinite alternate;
+}
+
+.snake-icon {
+  background: #e7f4ff;
+  border-radius: 50%;
+}
+
+.item-info {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  text-align: left;
+}
+
+.item-name {
+  font-weight: 800;
+  color: var(--text);
+  font-size: 16px;
+}
+
+.item-name span {
+  font-size: 13px;
+  color: #ffae2d;
+  margin-left: 4px;
+}
+
+.item-desc {
+  font-size: 13px;
+  color: #4b6c8e;
+  line-height: 1.4;
+}
