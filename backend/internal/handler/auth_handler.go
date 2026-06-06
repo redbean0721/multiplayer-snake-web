@@ -85,14 +85,19 @@ func (h *AuthHandler) Me(c *gin.Context) {
 func (h *AuthHandler) GetRankings(c *gin.Context) {
 	rankType := c.Query("type")
 	var users []models.User
-	var rankings []map[string]interface{}
+	
+	rankings := make([]map[string]interface{}, 0)
 
 	if rankType == "wealth" {
 		h.DB.Order("coins desc").Limit(10).Find(&users)
-		for _, u := range users { rankings = append(rankings, map[string]interface{}{"username": u.Username, "value": u.Coins}) }
+		for _, u := range users {
+			rankings = append(rankings, map[string]interface{}{"username": u.Username, "value": u.Coins})
+		}
 	} else {
 		h.DB.Order("highest_score desc").Limit(10).Find(&users)
-		for _, u := range users { rankings = append(rankings, map[string]interface{}{"username": u.Username, "value": u.HighestScore}) }
+		for _, u := range users {
+			rankings = append(rankings, map[string]interface{}{"username": u.Username, "value": u.HighestScore})
+		}
 	}
 	c.JSON(http.StatusOK, rankings)
 }

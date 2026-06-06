@@ -31,17 +31,15 @@ type Point struct { X int `json:"x"`; Y int `json:"y"` }
 type Food struct { X int `json:"x"`; Y int `json:"y"`; Type string `json:"type"` }
 
 type Snake struct {
-	Body       []Point `json:"body"`
-	Dir        Point   `json:"-"`
-	NextDir    Point   `json:"-"`
-	Score      int     `json:"score"`
-	BoostSteps int     `json:"-"`
-	TickCount  int     `json:"-"`
-	
-	// ✨ 新增局內任務進度快取
-	SessionApples int `json:"-"`
-	SessionKills  int `json:"-"`
-	Color         string  `json:"color"` // ✨ 新增回傳給前端的顏色屬性
+	Body          []Point `json:"body"`
+	Dir           Point   `json:"-"`
+	NextDir       Point   `json:"-"`
+	Score         int     `json:"score"`
+	BoostSteps    int     `json:"-"`
+	TickCount     int     `json:"-"`
+	SessionApples int     `json:"-"`
+	SessionKills  int     `json:"-"`
+	Color         string  `json:"color"`
 }
 
 type Hub struct {
@@ -104,8 +102,6 @@ func (h *Hub) Register(c *Client) {
 	h.Clients[c] = true
 	snakesData := make(map[string]interface{})
 	for client, snake := range h.Snakes { snakesData[client.Name] = snake }
-	
-	// ✨ 修正：連線時也一併把食物傳給觀戰者
 	payload := map[string]interface{}{"snakes": snakesData, "foods": h.Foods, "cols": h.Cols, "rows": h.Rows}
 	h.Mu.Unlock()
 	c.SendJSON("game_update", payload)
@@ -113,16 +109,18 @@ func (h *Hub) Register(c *Client) {
 
 func (h *Hub) Unregister(c *Client) {
 	h.Mu.Lock()
-	// ✨ 玩家若直接關閉網頁斷線，也要結算他的任務進度
-	if snake, ok := h.Snakes[c]; ok {
+	snake, wasPlaying := h.Snakes[c]
+	if wasPlaying { delete(h.Snakes, c) }
+	if _, ok := h.Clients[c]; ok { delete(h.Clients, c); c.Conn.Close() }
+	h.Mu.Unlock()
+
+	// ✨ 優化：鎖解開後，再執行耗時的 DB 操作
+	if wasPlaying {
 		h.DB.Model(&models.User{}).Where("username = ?", c.Name).Updates(map[string]interface{}{
 			"daily_apples": gorm.Expr("daily_apples + ?", snake.SessionApples),
 			"daily_kills":  gorm.Expr("daily_kills + ?", snake.SessionKills),
 		})
-		delete(h.Snakes, c)
 	}
-	if _, ok := h.Clients[c]; ok { delete(h.Clients, c); c.Conn.Close() }
-	h.Mu.Unlock()
 }
 
 func (h *Hub) Broadcast(msgType string, payload interface{}) {
@@ -132,15 +130,15 @@ func (h *Hub) Broadcast(msgType string, payload interface{}) {
 }
 
 func (h *Hub) SpawnSnake(c *Client) {
-	h.Mu.Lock()
-	defer h.Mu.Unlock()
-	
-	// ✨ 查詢該玩家選擇的皮膚
+	// ✨ 優化：先在鎖外查詢資料庫，絕對不卡住遊戲迴圈
 	var user models.User
 	h.DB.Where("username = ?", c.Name).First(&user)
 	skin := user.CurrentSkin
 	if skin == "" { skin = "#10b981" }
 
+	h.Mu.Lock()
+	defer h.Mu.Unlock()
+	
 	startX := h.Cols/2 + rand.Intn(10) - 5
 	startY := h.Rows/2 + rand.Intn(10) - 5
 	h.Snakes[c] = &Snake{
@@ -148,7 +146,7 @@ func (h *Hub) SpawnSnake(c *Client) {
 		Dir:           Point{X: 1, Y: 0}, NextDir: Point{X: 1, Y: 0},
 		Score:         0, BoostSteps: 0, TickCount: 0,
 		SessionApples: 0, SessionKills: 0,
-		Color:         skin, // ✨ 賦予顏色
+		Color:         skin,
 	}
 }
 
@@ -200,7 +198,6 @@ func (h *Hub) RunGameEngine() {
 						collision = true
 						if otherClient != c { 
 							killer = otherClient 
-							// ✨ 給凶手增加擊殺數
 							otherSnake.SessionKills++
 						}
 						break
@@ -230,13 +227,16 @@ func (h *Hub) RunGameEngine() {
 					snake.Score += 5; snake.BoostSteps += 30
 				} else {
 					snake.Score += 1
-					snake.SessionApples++ // ✨ 增加蘋果食用數
+					snake.SessionApples++ 
 				}
 
+				// ✨ 優化：升級星星也不要卡住迴圈
 				if prevScore/5 < snake.Score/5 {
 					earnedStars := (snake.Score / 5) - (prevScore / 5)
-					h.DB.Model(&models.User{}).Where("username = ?", c.Name).UpdateColumn("stars", gorm.Expr("stars + ?", earnedStars))
-					h.SyncResources(c)
+					go func(playerName string, stars int, client *Client) {
+						h.DB.Model(&models.User{}).Where("username = ?", playerName).UpdateColumn("stars", gorm.Expr("stars + ?", stars))
+						h.SyncResources(client)
+					}(c.Name, earnedStars, c)
 				}
 			} else {
 				snake.Body = snake.Body[:len(snake.Body)-1]
@@ -255,7 +255,6 @@ func (h *Hub) RunGameEngine() {
 		snakesData := make(map[string]interface{})
 		for c, snake := range h.Snakes { snakesData[c.Name] = snake }
 		
-		// ✨ 修正：取消過濾，直接把食物發給全部連線的人（包含大廳觀戰者）
 		payload := map[string]interface{}{"snakes": snakesData, "foods": h.Foods, "cols": h.Cols, "rows": h.Rows}
 		h.Mu.Unlock()
 		h.Broadcast("game_update", payload)
@@ -264,26 +263,37 @@ func (h *Hub) RunGameEngine() {
 
 func (h *Hub) handleDeath(deadClient *Client, deadSnake *Snake, killer *Client) {
 	coinsEarned := deadSnake.Score * 10
-	
-	var user models.User
-	if err := h.DB.Where("username = ?", deadClient.Name).First(&user).Error; err == nil {
-		user.Coins += coinsEarned
-		if deadSnake.Score > user.HighestScore { user.HighestScore = deadSnake.Score }
-		h.DB.Save(&user) 
-		
-		// ✨ 死亡時儲存任務進度
-		h.DB.Model(&user).Updates(map[string]interface{}{
-			"daily_apples": gorm.Expr("daily_apples + ?", deadSnake.SessionApples),
-			"daily_kills":  gorm.Expr("daily_kills + ?", deadSnake.SessionKills),
-		})
-	}
+	deadName := deadClient.Name
 
+	var killerName string
+	var killerClient *Client
 	if killer != nil {
-		h.DB.Model(&models.User{}).Where("username = ?", killer.Name).UpdateColumn("diamonds", gorm.Expr("diamonds + ?", 1))
-		h.SyncResources(killer)
+		killerName = killer.Name
+		killerClient = killer
 	}
-
-	deadClient.SendJSON("game_over", map[string]interface{}{"score": deadSnake.Score, "coins": coinsEarned})
-	h.SyncResources(deadClient)
+	
+	// 在鎖內先刪除玩家資料並通知前端結束
 	delete(h.Snakes, deadClient)
+	deadClient.SendJSON("game_over", map[string]interface{}{"score": deadSnake.Score, "coins": coinsEarned})
+
+	// ✨ 優化：將資料庫結算丟到背景 Goroutine，立刻放開引擎的鎖！
+	go func(dName, kName string, dScore, dApples, dKills, cEarned int, dClient, kClient *Client) {
+		var user models.User
+		if err := h.DB.Where("username = ?", dName).First(&user).Error; err == nil {
+			user.Coins += cEarned
+			if dScore > user.HighestScore { user.HighestScore = dScore }
+			h.DB.Save(&user) 
+			
+			h.DB.Model(&user).Updates(map[string]interface{}{
+				"daily_apples": gorm.Expr("daily_apples + ?", dApples),
+				"daily_kills":  gorm.Expr("daily_kills + ?", dKills),
+			})
+		}
+
+		if kName != "" {
+			h.DB.Model(&models.User{}).Where("username = ?", kName).UpdateColumn("diamonds", gorm.Expr("diamonds + ?", 1))
+			h.SyncResources(kClient)
+		}
+		h.SyncResources(dClient)
+	}(deadName, killerName, deadSnake.Score, deadSnake.SessionApples, deadSnake.SessionKills, coinsEarned, deadClient, killerClient)
 }

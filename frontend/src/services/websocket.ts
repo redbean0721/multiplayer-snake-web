@@ -2,9 +2,10 @@ let socket: WebSocket | null = null;
 const listeners = new Map<string, (payload: any) => void>();
 let onDisconnectCallback: (() => void) | null = null;
 
+const WS_BASE = import.meta.env.DEV ? 'ws://localhost:8080' : 'wss://api.game.redd.lnstw.xyz';
+
 export const connectWS = (token: string) => {
-  // ✨ 可以統一使用變數 (根據你的網域修改)
-  const WS_URL = `wss://api.game.redd.lnstw.xyz/api/ws?token=${token}`;
+  const WS_URL = `${WS_BASE}/api/ws?token=${token}`;
   socket = new WebSocket(WS_URL);
   
   socket.onmessage = (event) => {
