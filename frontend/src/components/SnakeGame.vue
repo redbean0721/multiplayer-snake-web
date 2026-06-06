@@ -11,7 +11,6 @@ const emit = defineEmits<{
   (e: 'update-score', score: number): void
 }>()
 
-// ✨ 新增 foodType
 interface Tile {
   x: number; y: number
   isSnake: boolean; isHead: boolean; foodType: string
@@ -24,6 +23,9 @@ const gridRows = ref(0)
 const isPlaying = ref(false)
 
 const tileSize = ref(22) 
+
+// ✨ 用來儲存排行榜前 5 名
+const topPlayers = ref<{ name: string; score: number }[]>([])
 
 const initGrid = (cols: number, rows: number) => {
   const grid: Tile[][] = []
@@ -58,7 +60,6 @@ onMounted(() => {
       nextTick(() => { calculateTileSize() })
     }
 
-    // 清空畫布
     for (let y = 0; y < gridRows.value; y++) {
       for (let x = 0; x < gridCols.value; x++) {
         gameGrid.value[y][x].isSnake = false
@@ -67,19 +68,22 @@ onMounted(() => {
       }
     }
 
-    // ✨ 畫出包含類型的食物
     if (payload.foods && Array.isArray(payload.foods)) {
       payload.foods.forEach((f: any) => {
         if (f.y >= 0 && f.y < gridRows.value && f.x >= 0 && f.x < gridCols.value) {
-          gameGrid.value[f.y][f.x].foodType = f.type // 寫入 apple 或 star
+          gameGrid.value[f.y][f.x].foodType = f.type 
         }
       })
     }
 
-    // 畫出蛇
+    // ✨ 收集玩家來排排行榜
     const snakesMap = payload.snakes
+    const currentPlayers: { name: string; score: number }[] = []
+
     for (const key in snakesMap) {
       const snake = snakesMap[key]
+      currentPlayers.push({ name: key, score: snake.score })
+
       snake.body.forEach((segment: any, index: number) => {
         if (segment.y >= 0 && segment.y < gridRows.value && segment.x >= 0 && segment.x < gridCols.value) {
           gameGrid.value[segment.y][segment.x].isSnake = true
@@ -87,6 +91,10 @@ onMounted(() => {
         }
       })
     }
+
+    // ✨ 排出前五名
+    currentPlayers.sort((a, b) => b.score - a.score)
+    topPlayers.value = currentPlayers.slice(0, 5)
 
     const mySnake = snakesMap[props.playerName]
     if (mySnake) {
@@ -133,6 +141,18 @@ const handleKeydown = (e: KeyboardEvent) => {
 <template>
   <div class="play-area">
     <div class="snake-showcase" ref="showcaseRef">
+      
+      <div class="leaderboard" v-if="topPlayers.length > 0">
+        <h3>🏆 戰況排名</h3>
+        <ol>
+          <li v-for="(p, index) in topPlayers" :key="p.name" :class="{ 'is-me': p.name === playerName }">
+            <span class="rank">#{{ index + 1 }}</span>
+            <span class="name">{{ p.name }}</span>
+            <span class="score">{{ p.score }}</span>
+          </li>
+        </ol>
+      </div>
+
       <div 
         v-if="gameGrid.length > 0" 
         class="snake-grid" 

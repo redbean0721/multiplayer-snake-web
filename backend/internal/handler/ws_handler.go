@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"log"
+	"multiplayer-snake-web-backend/internal/models"
 	"multiplayer-snake-web-backend/internal/store"
 	"multiplayer-snake-web-backend/pkg/request"
 	"net/http"
@@ -40,11 +41,44 @@ func HandleWs(hub *store.Hub, sm *store.SessionManager, c *gin.Context) {
 
 	client := &store.Client{Conn: conn, Name: sessionData.Username}
 	hub.Register(client)
-	
-	// ✨ 連線成功後，立刻抓取資料庫的財產，傳給前端更新 UI
 	hub.SyncResources(client)
 	
-	defer hub.Unregister(client)
+	// 1. 發送歷史紀錄
+	var messages []models.Message
+	hub.DB.Order("created_at desc").Limit(30).Find(&messages)
+
+	var history []ChatPayload
+	for _, m := range messages {
+		history = append(history, ChatPayload{
+			ID:      int64(m.ID),
+			User:    m.Username,
+			Content: m.Content,
+			Time:    m.CreatedAt.Format("15:04"),
+		})
+	}
+	client.SendJSON("chat_history", history)
+
+	// ✨ 2. 廣播系統訊息：告訴所有人這個玩家進來了 (包含自己，但不寫入 DB)
+	sysJoinMsg := ChatPayload{
+		ID:      time.Now().UnixNano(),
+		User:    "系統",
+		Content: "玩家 " + client.Name + " 已進入大廳",
+		Time:    time.Now().Format("15:04"),
+	}
+	hub.Broadcast("chat", sysJoinMsg)
+
+	// ✨ 3. 確保玩家離線時廣播離開訊息，並註銷連線
+	defer func() {
+		sysLeaveMsg := ChatPayload{
+			ID:      time.Now().UnixNano(),
+			User:    "系統",
+			Content: "玩家 " + client.Name + " 離開了",
+			Time:    time.Now().Format("15:04"),
+		}
+		hub.Broadcast("chat", sysLeaveMsg)
+		
+		hub.Unregister(client)
+	}()
 
 	for {
 		_, msg, err := conn.ReadMessage()
@@ -56,16 +90,25 @@ func HandleWs(hub *store.Hub, sm *store.SessionManager, c *gin.Context) {
 		switch wsMsg.Type {
 		case "ping":
 			client.SendRaw(msg)
+			
 		case "chat":
 			var chatData ChatPayload
 			if err := json.Unmarshal(wsMsg.Payload, &chatData); err == nil {
-				chatData.ID = time.Now().UnixNano()
-				chatData.Time = time.Now().Format("15:04")
+				newMsg := models.Message{
+					Username: client.Name,
+					Content:  chatData.Content,
+				}
+				hub.DB.Create(&newMsg)
+
+				chatData.ID = int64(newMsg.ID)
+				chatData.Time = newMsg.CreatedAt.Format("15:04")
 				chatData.User = client.Name
 				hub.Broadcast("chat", chatData)
 			}
+			
 		case "start_game":
 			hub.SpawnSnake(client)
+			
 		case "move":
 			var m store.Point
 			if err := json.Unmarshal(wsMsg.Payload, &m); err == nil {

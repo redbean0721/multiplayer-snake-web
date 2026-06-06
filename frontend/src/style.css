@@ -193,6 +193,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  min-height: 0; /* ✨ 修復外層被撐開的關鍵 */
 }
 
 .panel-top-bar {
@@ -243,12 +244,11 @@ body {
   align-items: stretch;
 }
 
-/* ====== ✨ 修正開始：加入 min-width: 0 確保它能被縮小 ====== */
 .play-area {
   display: flex;
   flex-direction: column;
   min-height: 0;
-  min-width: 0; /* 關鍵修復 */
+  min-width: 0; 
   gap: 10px;
 }
 
@@ -259,10 +259,10 @@ body {
   padding: 16px;
   flex: 1;
   min-height: 0;
-  min-width: 0; /* 關鍵修復 */
+  min-width: 0; 
   overflow: hidden;
+  position: relative; /* ✨ 為了讓排行榜可以絕對定位在這裡 */
 }
-/* ====== ✨ 修正結束 ====== */
 
 .snake-grid {
   display: grid;
@@ -283,27 +283,21 @@ body {
   border-radius: 2px;
 }
 
-.tile.snake {
-  background: green;
-}
+.tile.snake { background: green; }
+.tile.head { background: purple; }
 
-.tile.head {
-  background: purple;
-}
-
-/* 刪除原本的 .tile.food，改為以下 */
 .tile.apple {
-  background: #ef4444; /* 蘋果的紅色 */
-  border-radius: 50%;  /* 變成圓形 */
-  transform: scale(0.85); /* 稍微縮小一點比較可愛 */
+  background: #ef4444; 
+  border-radius: 50%;  
+  transform: scale(0.85); 
 }
 
 .tile.star {
-  background: #f7b731; /* 星星的黃色 */
+  background: #f7b731; 
   border-radius: 20%; 
-  transform: rotate(45deg) scale(0.9); /* 轉 45 度看起來像菱形/星星 */
-  box-shadow: 0 0 8px #f7b731; /* 加上發光效果！ */
-  animation: pulse-star 1s infinite alternate; /* 閃爍動畫 */
+  transform: rotate(45deg) scale(0.9); 
+  box-shadow: 0 0 8px #f7b731; 
+  animation: pulse-star 1s infinite alternate; 
 }
 
 @keyframes pulse-star {
@@ -321,6 +315,14 @@ body {
   min-height: 0;
 }
 
+/* ====== ✨ 聊天室結界：強制限制清單高度 ====== */
+.chat-list-wrapper {
+  flex: 1;
+  position: relative;
+  min-height: 0;
+  margin-bottom: 10px;
+}
+
 .chat-mini ul {
   margin: 0;
   padding: 0;
@@ -328,9 +330,12 @@ body {
   display: flex;
   flex-direction: column-reverse;
   gap: 10px;
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  overflow: hidden; /* 隱藏溢出的舊訊息，絕不拉長畫面 */
 }
 
 .chat-mini li {
@@ -420,20 +425,10 @@ body {
   line-height: 1;
 }
 
-.latency-float p {
-  font-size: 16px;
-  font-weight: 700;
-}
+.latency-float p { font-size: 16px; font-weight: 700; }
+.latency-float small { font-size: 12px; }
 
-.latency-float small {
-  font-size: 12px;
-}
-
-.signal-bars {
-  display: flex;
-  align-items: flex-end;
-  gap: 3px;
-}
+.signal-bars { display: flex; align-items: flex-end; gap: 3px; }
 
 .bar {
   width: 5px;
@@ -442,98 +437,77 @@ body {
   opacity: 0.45;
 }
 
-.bar:nth-child(1) {
-  height: 9px;
+.bar:nth-child(1) { height: 9px; }
+.bar:nth-child(2) { height: 14px; }
+.bar:nth-child(3) { height: 19px; }
+.bar:nth-child(4) { height: 24px; }
+
+.latency-float.good .bar.on { background: var(--green); opacity: 1; }
+.latency-float.mid .bar.on { background: var(--yellow); opacity: 1; }
+.latency-float.bad .bar.on { background: var(--red); opacity: 1; }
+
+/* ====== ✨ 排行榜樣式 ====== */
+.leaderboard {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(4px);
+  padding: 12px 16px;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  z-index: 10;
+  min-width: 160px;
 }
 
-.bar:nth-child(2) {
-  height: 14px;
+.leaderboard h3 {
+  margin: 0 0 8px 0;
+  font-size: 14px;
+  color: #17334f;
+  text-align: center;
 }
 
-.bar:nth-child(3) {
-  height: 19px;
+.leaderboard ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
-.bar:nth-child(4) {
-  height: 24px;
+.leaderboard li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #4b6c8e;
 }
 
-.latency-float.good .bar.on {
-  background: var(--green);
-  opacity: 1;
+.leaderboard li.is-me {
+  font-weight: 800;
+  color: #ef4444; /* 自己用紅色標記 */
 }
 
-.latency-float.mid .bar.on {
-  background: var(--yellow);
-  opacity: 1;
+.leaderboard .rank {
+  font-weight: bold;
+  color: #ffae2d;
+  width: 20px;
 }
 
-.latency-float.bad .bar.on {
-  background: var(--red);
-  opacity: 1;
+.leaderboard .name {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 80px;
 }
 
-@media (max-width: 1240px) {
-  .topbar {
-    grid-template-columns: 210px 170px 1fr 110px;
-  }
-
-  .topbar-tools {
-    justify-content: flex-end;
-  }
-
-  .content {
-    grid-template-columns: 1fr 90px;
-  }
-
-  .hero-area, .panel-top-bar {
-    grid-template-columns: 1fr;
-  }
+.leaderboard .score {
+  font-weight: bold;
+  color: #17334f;
 }
 
-@media (max-width: 940px) {
-  .topbar {
-    grid-template-columns: 1fr;
-  }
-
-  .topbar-settings {
-    justify-self: center;
-  }
-
-  .player-chip,
-  .round,
-  .pill {
-    width: 100%;
-  }
-
-  .content {
-    grid-template-columns: 1fr;
-  }
-
-  .side {
-    flex-direction: row;
-    flex-wrap: wrap;
-    justify-content: center;
-  }
-
-  .side button {
-    width: auto;
-    min-width: 120px;
-  }
-
-  .bottom-actions {
-    flex-wrap: wrap;
-  }
-
-  .bottom-actions .secondary,
-  .bottom-actions .start {
-    width: 100%;
-    min-width: 0;
-    flex: none;
-  }
-}
-
-/* ====== ✨ 登入畫面樣式 ====== */
 .login-screen {
   display: flex;
   justify-content: center;
@@ -556,17 +530,8 @@ body {
   text-align: center;
 }
 
-.login-header h1 {
-  margin: 0 0 8px 0;
-  color: var(--text);
-  font-size: 28px;
-}
-
-.login-header p {
-  margin: 0;
-  color: var(--sub);
-  font-size: 15px;
-}
+.login-header h1 { margin: 0 0 8px 0; color: var(--text); font-size: 28px; }
+.login-header p { margin: 0; color: var(--sub); font-size: 15px; }
 
 .login-card input {
   padding: 16px;
@@ -580,39 +545,265 @@ body {
   background: rgba(255, 255, 255, 0.8);
 }
 
-.login-card input:focus {
-  border-color: #7f85ff;
-}
+.login-card input:focus { border-color: #7f85ff; }
 
-.divider {
-  position: relative;
-  text-align: center;
-  margin: 10px 0;
-}
-
+.divider { position: relative; text-align: center; margin: 10px 0; }
 .divider::before {
   content: '';
   position: absolute;
-  top: 50%;
-  left: 0;
-  right: 0;
+  top: 50%; left: 0; right: 0;
   height: 1px;
   background: #c0d5ec;
   z-index: 1;
 }
-
 .divider span {
   position: relative;
   z-index: 2;
-  background: #ebf3f9; /* 配合背景稍微調整 */
+  background: #ebf3f9; 
   padding: 0 12px;
   color: var(--sub);
   font-size: 14px;
 }
 
 .pill.discord {
-  background: #5865F2; /* Discord 品牌色 */
+  background: #5865F2; 
   color: white;
   opacity: 0.6;
   cursor: not-allowed;
 }
+
+@media (max-width: 1240px) {
+  .topbar { grid-template-columns: 210px 170px 1fr 110px; }
+  .topbar-tools { justify-content: flex-end; }
+  .content { grid-template-columns: 1fr 90px; }
+  .hero-area, .panel-top-bar { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 940px) {
+  .topbar { grid-template-columns: 1fr; }
+  .topbar-settings { justify-self: center; }
+  .player-chip, .round, .pill { width: 100%; }
+  .content { grid-template-columns: 1fr; }
+  .side {
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .side button { width: auto; min-width: 120px; }
+  .bottom-actions { flex-wrap: wrap; }
+  .bottom-actions .secondary, .bottom-actions .start {
+    width: 100%;
+    min-width: 0;
+    flex: none;
+  }
+}
+
+/* ====== ✨ 排行榜彈出視窗 (Modal) ====== */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(15, 30, 50, 0.6);
+  backdrop-filter: blur(4px);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background: var(--panel-strong);
+  border-radius: 24px;
+  padding: 30px;
+  width: 90%;
+  max-width: 400px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.modal-content h2 {
+  margin: 0;
+  text-align: center;
+  color: var(--text);
+  font-size: 24px;
+}
+
+.ranking-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ranking-list li {
+  display: flex;
+  align-items: center;
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.7);
+  border-radius: 12px;
+  font-size: 16px;
+}
+
+.ranking-list li.is-me {
+  background: #fff0eb;
+  border: 2px solid #ffae2d;
+}
+
+.rank-number {
+  font-weight: 800;
+  color: #ffae2d;
+  width: 40px;
+}
+
+.rank-name {
+  flex: 1;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.rank-score {
+  font-weight: 800;
+  color: var(--blue-deep);
+}
+
+.close-btn {
+  background: #e2eaf5;
+  color: #4b6c8e;
+  border: 0;
+  padding: 14px;
+  border-radius: 16px;
+  font-weight: 700;
+  font-size: 16px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.close-btn:hover {
+  background: #d0dded;
+}
+
+/* 修改 Discord 按鈕解除限制 */
+.pill.discord {
+  background: #5865F2; 
+  color: white;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.pill.discord:hover {
+  background: #4752C4;
+}
+
+/* ====== ✨ 升級版排行榜彈出視窗 ====== */
+.modal-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(15, 30, 50, 0.6);
+  backdrop-filter: blur(4px);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background: var(--panel-strong);
+  border-radius: 24px;
+  padding: 30px;
+  width: 90%;
+  max-width: 400px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.modal-content h2 {
+  margin: 0;
+  text-align: center;
+  color: var(--text);
+  font-size: 24px;
+}
+
+/* ✨ 頁籤切換按鈕區域 */
+.ranking-tabs {
+  display: flex;
+  background: #e2eaf5;
+  border-radius: 14px;
+  padding: 4px;
+}
+
+.ranking-tabs button {
+  flex: 1;
+  background: transparent;
+  border: 0;
+  padding: 10px;
+  border-radius: 10px;
+  font-family: 'Noto Sans TC', sans-serif;
+  font-weight: 700;
+  font-size: 15px;
+  color: #6f8cab;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.ranking-tabs button.active {
+  background: #fff;
+  color: var(--blue-deep);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+}
+
+.ranking-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 200px; /* 保持一致的高度體驗 */
+}
+
+.ranking-list li {
+  display: flex;
+  align-items: center;
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.7);
+  border-radius: 12px;
+  font-size: 16px;
+}
+
+.ranking-list li.is-me {
+  background: #fff0eb;
+  border: 2px solid #ffae2d;
+}
+
+.ranking-list li.empty-hint {
+  justify-content: center;
+  background: transparent;
+  color: #6f8cab;
+  font-size: 14px;
+}
+
+.rank-number { font-weight: 800; color: #ffae2d; width: 40px; }
+.rank-name { flex: 1; font-weight: 600; color: var(--text); }
+.rank-score { font-weight: 800; color: var(--blue-deep); }
+
+.close-btn {
+  background: #e2eaf5;
+  color: #4b6c8e;
+  border: 0;
+  padding: 14px;
+  border-radius: 16px;
+  font-weight: 700;
+  font-size: 16px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.close-btn:hover { background: #d0dded; }

@@ -1,8 +1,10 @@
 package store
 
 import (
-	"sync"
+	"multiplayer-snake-web-backend/internal/models"
+
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 type SessionData struct {
@@ -11,39 +13,39 @@ type SessionData struct {
 }
 
 type SessionManager struct {
-	mu       sync.RWMutex
-	sessions map[string]SessionData
+	DB *gorm.DB // ✨ 全面改為依賴資料庫
 }
 
-func NewSessionManager() *SessionManager {
+func NewSessionManager(db *gorm.DB) *SessionManager {
 	return &SessionManager{
-		sessions: make(map[string]SessionData),
+		DB: db,
 	}
 }
 
 func (s *SessionManager) CreateSession(userID uint, username string) string {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	
 	token := uuid.New().String()
-	s.sessions[token] = SessionData{
+	session := models.Session{
+		Token:    token,
 		UserID:   userID,
 		Username: username,
 	}
+	s.DB.Create(&session) // 寫入 SQLite
 	return token
 }
 
 func (s *SessionManager) GetSession(token string) (SessionData, bool) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	var session models.Session
+	result := s.DB.Where("token = ?", token).First(&session) // 從 SQLite 查詢
+	if result.Error != nil {
+		return SessionData{}, false
+	}
 	
-	data, exists := s.sessions[token]
-	return data, exists
+	return SessionData{
+		UserID:   session.UserID,
+		Username: session.Username,
+	}, true
 }
 
-// ✨ 新增：登出時銷毀伺服器記憶體中的 Session
 func (s *SessionManager) DeleteSession(token string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	delete(s.sessions, token)
+	s.DB.Where("token = ?", token).Delete(&models.Session{})
 }

@@ -12,11 +12,7 @@ import (
 	"gorm.io/gorm"
 )
 
-type Client struct {
-	Conn *websocket.Conn
-	Mu   sync.Mutex
-	Name string
-}
+type Client struct { Conn *websocket.Conn; Mu sync.Mutex; Name string }
 
 func (c *Client) SendJSON(msgType string, payload interface{}) {
 	data, _ := json.Marshal(map[string]interface{}{"type": msgType, "payload": payload})
@@ -31,24 +27,16 @@ func (c *Client) SendRaw(data []byte) {
 	c.Conn.WriteMessage(websocket.TextMessage, data)
 }
 
-type Point struct {
-	X int `json:"x"`
-	Y int `json:"y"`
-}
-
-type Food struct {
-	X    int    `json:"x"`
-	Y    int    `json:"y"`
-	Type string `json:"type"` 
-}
+type Point struct { X int `json:"x"`; Y int `json:"y"` }
+type Food struct { X int `json:"x"`; Y int `json:"y"`; Type string `json:"type"` }
 
 type Snake struct {
 	Body       []Point `json:"body"`
 	Dir        Point   `json:"-"`
 	NextDir    Point   `json:"-"`
 	Score      int     `json:"score"`
-	BoostSteps int     `json:"-"` 
-	TickCount  int     `json:"-"` 
+	BoostSteps int     `json:"-"`
+	TickCount  int     `json:"-"`
 }
 
 type Hub struct {
@@ -56,7 +44,7 @@ type Hub struct {
 	Clients      map[*Client]bool
 	Mu           sync.RWMutex
 	Snakes       map[*Client]*Snake
-	Foods        []Food 
+	Foods        []Food
 	MaxFood      int
 	NextFoodTime time.Time
 	Cols         int
@@ -92,9 +80,7 @@ func (h *Hub) spawnSingleFood() {
 		fx, fy := rand.Intn(h.Cols), rand.Intn(h.Rows)
 		overlap := false
 		for _, snake := range h.Snakes {
-			for _, s := range snake.Body {
-				if s.X == fx && s.Y == fy { overlap = true; break }
-			}
+			for _, s := range snake.Body { if s.X == fx && s.Y == fy { overlap = true; break } }
 		}
 		for _, f := range h.Foods {
 			if f.X == fx && f.Y == fy { overlap = true; break }
@@ -102,14 +88,24 @@ func (h *Hub) spawnSingleFood() {
 		if !overlap {
 			fType := "apple"
 			if rand.Intn(100) < 10 { fType = "star" }
-			
 			h.Foods = append(h.Foods, Food{X: fx, Y: fy, Type: fType})
 			break
 		}
 	}
 }
 
-func (h *Hub) Register(c *Client) { h.Mu.Lock(); h.Clients[c] = true; h.Mu.Unlock() }
+func (h *Hub) Register(c *Client) {
+	h.Mu.Lock()
+	h.Clients[c] = true
+	snakesData := make(map[string]interface{})
+	for client, snake := range h.Snakes { snakesData[client.Name] = snake }
+	
+	// ✨ 修正：連線時也一併把食物傳給觀戰者
+	payload := map[string]interface{}{"snakes": snakesData, "foods": h.Foods, "cols": h.Cols, "rows": h.Rows}
+	h.Mu.Unlock()
+	c.SendJSON("game_update", payload)
+}
+
 func (h *Hub) Unregister(c *Client) {
 	h.Mu.Lock()
 	if _, ok := h.Clients[c]; ok { delete(h.Clients, c); delete(h.Snakes, c); c.Conn.Close() }
@@ -128,9 +124,10 @@ func (h *Hub) SpawnSnake(c *Client) {
 	startX := h.Cols/2 + rand.Intn(10) - 5
 	startY := h.Rows/2 + rand.Intn(10) - 5
 	h.Snakes[c] = &Snake{
-		// ✨ 每次生成新蛇時，分數與加速步數都會確保重置為 0
-		Body: []Point{{X: startX, Y: startY}, {X: startX - 1, Y: startY}, {X: startX - 2, Y: startY}},
-		Dir: Point{X: 1, Y: 0}, NextDir: Point{X: 1, Y: 0}, Score: 0, BoostSteps: 0, TickCount: 0,
+		Body:       []Point{{X: startX, Y: startY}, {X: startX - 1, Y: startY}, {X: startX - 2, Y: startY}},
+		Dir:        Point{X: 1, Y: 0},
+		NextDir:    Point{X: 1, Y: 0},
+		Score:      0, BoostSteps: 0, TickCount: 0,
 	}
 }
 
@@ -149,13 +146,21 @@ func (h *Hub) RunGameEngine() {
 	for range ticker.C {
 		h.Mu.Lock()
 
+		if len(h.Snakes) == 0 {
+			if len(h.Foods) != 5 {
+				h.Foods = make([]Food, 0)
+				for i := 0; i < 5; i++ { h.spawnSingleFood() }
+			}
+			h.NextFoodTime = time.Now().Add(2 * time.Second)
+			h.Mu.Unlock()
+			continue 
+		}
+
 		for c, snake := range h.Snakes {
 			snake.TickCount++
-			
-			speedFactor := 2 
+			speedFactor := 2
 			if snake.BoostSteps > 0 { speedFactor = 1 }
-
-			if snake.TickCount % speedFactor != 0 { continue }
+			if snake.TickCount%speedFactor != 0 { continue }
 			if snake.BoostSteps > 0 { snake.BoostSteps-- }
 
 			snake.Dir = snake.NextDir
@@ -197,8 +202,7 @@ func (h *Hub) RunGameEngine() {
 				h.Foods = append(h.Foods[:eatenIdx], h.Foods[eatenIdx+1:]...)
 
 				if eatenFood.Type == "star" {
-					snake.Score += 5
-					snake.BoostSteps += 30 
+					snake.Score += 5; snake.BoostSteps += 30
 				} else {
 					snake.Score += 1
 				}
@@ -218,23 +222,14 @@ func (h *Hub) RunGameEngine() {
 				h.spawnSingleFood()
 				ratio := float64(len(h.Foods)) / float64(h.MaxFood)
 				baseDelay := 2000.0 + (ratio * 8000.0)
-				randomOffset := rand.Intn(4000)
-				h.NextFoodTime = time.Now().Add(time.Duration(baseDelay+float64(randomOffset)) * time.Millisecond)
+				h.NextFoodTime = time.Now().Add(time.Duration(baseDelay+float64(rand.Intn(4000))) * time.Millisecond)
 			}
-		} else {
-			// ✨ 核心修正：當場上沒有半個玩家時，進行生態系重置！
-			if len(h.Foods) != 5 {
-				h.Foods = make([]Food, 0) // 清空所有食物
-				for i := 0; i < 5; i++ {  // 重新長出 5 顆新鮮的
-					h.spawnSingleFood()
-				}
-			}
-			h.NextFoodTime = time.Now().Add(2 * time.Second)
 		}
 
 		snakesData := make(map[string]interface{})
 		for c, snake := range h.Snakes { snakesData[c.Name] = snake }
-
+		
+		// ✨ 修正：取消過濾，直接把食物發給全部連線的人（包含大廳觀戰者）
 		payload := map[string]interface{}{"snakes": snakesData, "foods": h.Foods, "cols": h.Cols, "rows": h.Rows}
 		h.Mu.Unlock()
 		h.Broadcast("game_update", payload)
@@ -242,10 +237,18 @@ func (h *Hub) RunGameEngine() {
 }
 
 func (h *Hub) handleDeath(deadClient *Client, deadSnake *Snake, killer *Client) {
-	coinsEarned := deadSnake.Score * 10 
-	if coinsEarned > 0 {
-		h.DB.Model(&models.User{}).Where("username = ?", deadClient.Name).UpdateColumn("coins", gorm.Expr("coins + ?", coinsEarned))
+	coinsEarned := deadSnake.Score * 10
+	
+	// ✨ 結算時同時判斷並更新 HighestScore
+	var user models.User
+	if err := h.DB.Where("username = ?", deadClient.Name).First(&user).Error; err == nil {
+		user.Coins += coinsEarned
+		if deadSnake.Score > user.HighestScore {
+			user.HighestScore = deadSnake.Score
+		}
+		h.DB.Save(&user) // 存回 DB
 	}
+
 	if killer != nil {
 		h.DB.Model(&models.User{}).Where("username = ?", killer.Name).UpdateColumn("diamonds", gorm.Expr("diamonds + ?", 1))
 		h.SyncResources(killer)

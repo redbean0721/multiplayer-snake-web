@@ -1,8 +1,10 @@
 let socket: WebSocket | null = null;
 const listeners = new Map<string, (payload: any) => void>();
+let onDisconnectCallback: (() => void) | null = null;
 
 export const connectWS = (token: string) => {
-  const WS_URL = `ws://10.0.0.110:8080/api/ws?token=${token}`;
+  // ✨ 可以統一使用變數 (根據你的網域修改)
+  const WS_URL = `wss://api.game.redd.lnstw.xyz/api/ws?token=${token}`;
   socket = new WebSocket(WS_URL);
   
   socket.onmessage = (event) => {
@@ -10,6 +12,11 @@ export const connectWS = (token: string) => {
     if (listeners.has(data.type)) {
       listeners.get(data.type)!(data.payload);
     }
+  };
+
+  // ✨ 監聽斷線事件
+  socket.onclose = () => {
+    if (onDisconnectCallback) onDisconnectCallback();
   };
 };
 
@@ -23,9 +30,13 @@ export const onWS = (type: string, callback: (payload: any) => void) => {
   listeners.set(type, callback);
 };
 
-// ✨ 新增：登出時主動關閉連線並清理監聽器
+export const onDisconnectWS = (callback: () => void) => {
+  onDisconnectCallback = callback;
+};
+
 export const disconnectWS = () => {
   if (socket) {
+    socket.onclose = null; // 故意登出時不觸發 onDisconnectCallback
     socket.close();
     socket = null;
   }
