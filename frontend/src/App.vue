@@ -4,7 +4,8 @@ import { connectWS, sendWS, onWS, disconnectWS, onDisconnectWS } from './service
 import ChatRoom from './components/ChatRoom.vue'
 import SnakeGame from './components/SnakeGame.vue'
 
-const API_BASE = import.meta.env.DEV ? 'http://localhost:8080' : 'https://api.game.redd.lnstw.xyz'
+const API_BASE = import.meta.env.VITE_API_BASE;
+if (!API_BASE) throw new Error("VITE_API_BASE is not defined in environment variables");
 const isLoggedIn = ref(false)
 const guestNameInput = ref('')
 const playerName = ref('')

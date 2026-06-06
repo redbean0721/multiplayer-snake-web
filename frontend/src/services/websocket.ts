@@ -2,7 +2,8 @@ let socket: WebSocket | null = null;
 const listeners = new Map<string, (payload: any) => void>();
 let onDisconnectCallback: (() => void) | null = null;
 
-const WS_BASE = import.meta.env.DEV ? 'ws://localhost:8080' : 'wss://api.game.redd.lnstw.xyz';
+const WS_BASE = import.meta.env.VITE_WS_BASE;
+if (!WS_BASE) throw new Error("VITE_WS_BASE is not defined in environment variables");
 
 export const connectWS = (token: string) => {
   const WS_URL = `${WS_BASE}/api/ws?token=${token}`;
