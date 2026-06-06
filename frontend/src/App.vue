@@ -222,6 +222,54 @@ onMounted(async () => {
   }
 })
 
+// ✨ 商店系統狀態
+const showShopModal = ref(false)
+const shopCatalog = ref<any[]>([])
+const ownedSkins = ref<string[]>([])
+const currentSkin = ref('')
+
+const fetchShop = async () => {
+  try {
+    const res = await fetch(`${API_BASE}/api/shop`, { credentials: 'include' })
+    if (res.ok) {
+      const data = await res.json()
+      shopCatalog.value = data.catalog
+      ownedSkins.value = data.owned
+      currentSkin.value = data.current
+      showShopModal.value = true
+    }
+  } catch (e) {}
+}
+
+const buySkin = async (skinId: string) => {
+  try {
+    const res = await fetch(`${API_BASE}/api/shop/buy`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      credentials: 'include', body: JSON.stringify({ skin_id: skinId })
+    })
+    const data = await res.json()
+    alert(data.message || data.error)
+    if (res.ok) {
+      fetchShop()
+      sendWS('sync_resources', {}) // 刷新錢包
+    }
+  } catch (e) {}
+}
+
+const equipSkin = async (skinId: string) => {
+  try {
+    const res = await fetch(`${API_BASE}/api/shop/equip`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      credentials: 'include', body: JSON.stringify({ skin_id: skinId })
+    })
+    const data = await res.json()
+    if (res.ok) {
+      alert('裝備成功！(下一局生效)')
+      fetchShop()
+    } else { alert(data.error) }
+  } catch (e) {}
+}
+
 onUnmounted(() => { if (pingInterval) clearInterval(pingInterval) })
 </script>
 
@@ -281,6 +329,7 @@ onUnmounted(() => { if (pingInterval) clearInterval(pingInterval) })
               :player-name="playerName" 
               @update-score="currentScore = $event" 
               @open-pokedex="showPokedexModal = true"
+              @open-shop="fetchShop"
             />
             
           </div>
@@ -391,6 +440,38 @@ onUnmounted(() => { if (pingInterval) clearInterval(pingInterval) })
           </li>
         </ul>
         <button class="close-btn" @click="showPokedexModal = false">關閉</button>
+      </div>
+    </div>
+
+    <div v-if="showShopModal" class="modal-overlay" @click.self="showShopModal = false">
+      <div class="modal-content shop-content">
+        <h2>🛍️ 造型商店</h2>
+        
+        <div class="shop-grid">
+          <div v-for="item in shopCatalog" :key="item.id" class="shop-item">
+            
+            <div class="skin-preview" 
+                 :class="{ 
+                   'rainbow-snake': item.id === 'rainbow', 
+                   'golden-snake': item.id === 'golden' 
+                 }"
+                 :style="!['rainbow', 'golden'].includes(item.id) ? { backgroundColor: item.id } : {}">
+            </div>
+
+            <div class="shop-item-name">{{ item.name }}</div>
+
+            <button v-if="item.id === currentSkin" class="reject-btn" disabled>使用中</button>
+            <button v-else-if="ownedSkins.includes(item.id)" class="accept-btn" @click="equipSkin(item.id)">裝備</button>
+            <button v-else class="buy-btn" @click="buySkin(item.id)">
+              {{ item.price }}
+              <span v-if="item.currency === 'coins'">🪙</span>
+              <span v-else-if="item.currency === 'stars'">⭐</span>
+              <span v-else>💎</span>
+            </button>
+          </div>
+        </div>
+
+        <button class="close-btn" @click="showShopModal = false">關閉</button>
       </div>
     </div>
 

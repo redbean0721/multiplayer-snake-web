@@ -1018,3 +1018,87 @@ body {
   color: #4b6c8e;
   line-height: 1.4;
 }
+
+/* ====== ✨ 幻彩霓虹與尊爵金動態特效 ====== */
+.rainbow-snake {
+  animation: rainbow-anim 1.5s infinite linear;
+}
+
+@keyframes rainbow-anim {
+  0% { background-color: #ff0000; }
+  16% { background-color: #ff9900; }
+  33% { background-color: #ffff00; }
+  50% { background-color: #33cc33; }
+  66% { background-color: #3399ff; }
+  83% { background-color: #cc33cc; }
+  100% { background-color: #ff0000; }
+}
+
+.golden-snake {
+  background: linear-gradient(135deg, #ffd700, #ffaa00);
+  box-shadow: inset 0 0 10px rgba(255, 255, 255, 0.8), 0 0 8px #ffcc00;
+}
+
+/* 蛇頭覆蓋原本的背景色並套用陰影 */
+.rainbow-snake.head, .golden-snake.head {
+  filter: brightness(0.7);
+}
+
+/* ====== ✨ 商店系統樣式 ====== */
+.shop-content {
+  max-width: 600px !important; /* 商店比較寬 */
+}
+
+.shop-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 14px;
+  max-height: 400px;
+  overflow-y: auto;
+  padding: 4px;
+}
+
+.shop-item {
+  background: rgba(255, 255, 255, 0.7);
+  border-radius: 16px;
+  padding: 16px 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.03);
+}
+
+.skin-preview {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+}
+
+.shop-item-name {
+  font-weight: bold;
+  font-size: 14px;
+  color: var(--text);
+  text-align: center;
+}
+
+.buy-btn {
+  background: #fff;
+  border: 2px solid #e2eaf5;
+  color: #17334f;
+  padding: 6px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: bold;
+  font-size: 13px;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.buy-btn:hover {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+}

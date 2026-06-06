@@ -41,6 +41,7 @@ type Snake struct {
 	// ✨ 新增局內任務進度快取
 	SessionApples int `json:"-"`
 	SessionKills  int `json:"-"`
+	Color         string  `json:"color"` // ✨ 新增回傳給前端的顏色屬性
 }
 
 type Hub struct {
@@ -133,13 +134,21 @@ func (h *Hub) Broadcast(msgType string, payload interface{}) {
 func (h *Hub) SpawnSnake(c *Client) {
 	h.Mu.Lock()
 	defer h.Mu.Unlock()
+	
+	// ✨ 查詢該玩家選擇的皮膚
+	var user models.User
+	h.DB.Where("username = ?", c.Name).First(&user)
+	skin := user.CurrentSkin
+	if skin == "" { skin = "#10b981" }
+
 	startX := h.Cols/2 + rand.Intn(10) - 5
 	startY := h.Rows/2 + rand.Intn(10) - 5
 	h.Snakes[c] = &Snake{
-		Body:       []Point{{X: startX, Y: startY}, {X: startX - 1, Y: startY}, {X: startX - 2, Y: startY}},
-		Dir:        Point{X: 1, Y: 0}, NextDir: Point{X: 1, Y: 0},
-		Score:      0, BoostSteps: 0, TickCount: 0,
-		SessionApples: 0, SessionKills: 0, // ✨ 初始化
+		Body:          []Point{{X: startX, Y: startY}, {X: startX - 1, Y: startY}, {X: startX - 2, Y: startY}},
+		Dir:           Point{X: 1, Y: 0}, NextDir: Point{X: 1, Y: 0},
+		Score:         0, BoostSteps: 0, TickCount: 0,
+		SessionApples: 0, SessionKills: 0,
+		Color:         skin, // ✨ 賦予顏色
 	}
 }
 

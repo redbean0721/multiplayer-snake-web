@@ -2,39 +2,33 @@
 import { ref, onMounted, onUnmounted, nextTick } from 'vue'
 import { sendWS, onWS } from '../services/websocket'
 
-const props = defineProps<{
-  isInMatch: boolean,
-  playerName: string
-}>()
+const props = defineProps<{ isInMatch: boolean, playerName: string }>()
 
-// ✨ 新增 open-pokedex 的事件宣告
+// ✨ 增加 open-shop 事件
 const emit = defineEmits<{
   (e: 'update-score', score: number): void
-  (e: 'open-pokedex'): void 
+  (e: 'open-pokedex'): void
+  (e: 'open-shop'): void 
 }>()
 
 interface Tile {
   x: number; y: number
   isSnake: boolean; isHead: boolean; foodType: string
+  snakeColor: string // ✨ 新增蛇身顏色
 }
 
 const showcaseRef = ref<HTMLElement | null>(null)
 const gameGrid = ref<Tile[][]>([])
-const gridCols = ref(0)
-const gridRows = ref(0)
+const gridCols = ref(0); const gridRows = ref(0)
 const isPlaying = ref(false)
-
 const tileSize = ref(22) 
-
 const topPlayers = ref<{ name: string; score: number }[]>([])
 
 const initGrid = (cols: number, rows: number) => {
   const grid: Tile[][] = []
   for (let y = 0; y < rows; y++) {
     const row: Tile[] = []
-    for (let x = 0; x < cols; x++) {
-      row.push({ x, y, isSnake: false, isHead: false, foodType: '' })
-    }
+    for (let x = 0; x < cols; x++) { row.push({ x, y, isSnake: false, isHead: false, foodType: '', snakeColor: '' }) }
     grid.push(row)
   }
   return grid
@@ -55,8 +49,7 @@ onMounted(() => {
 
   onWS('game_update', (payload: any) => {
     if (gridCols.value !== payload.cols || gridRows.value !== payload.rows) {
-      gridCols.value = payload.cols
-      gridRows.value = payload.rows
+      gridCols.value = payload.cols; gridRows.value = payload.rows
       gameGrid.value = initGrid(payload.cols, payload.rows)
       nextTick(() => { calculateTileSize() })
     }
@@ -66,6 +59,7 @@ onMounted(() => {
         gameGrid.value[y][x].isSnake = false
         gameGrid.value[y][x].isHead = false
         gameGrid.value[y][x].foodType = ''
+        gameGrid.value[y][x].snakeColor = '' // 重置顏色
       }
     }
 
@@ -87,6 +81,7 @@ onMounted(() => {
       snake.body.forEach((segment: any, index: number) => {
         if (segment.y >= 0 && segment.y < gridRows.value && segment.x >= 0 && segment.x < gridCols.value) {
           gameGrid.value[segment.y][segment.x].isSnake = true
+          gameGrid.value[segment.y][segment.x].snakeColor = snake.color // ✨ 套用從後端來的顏色
           if (index === 0) gameGrid.value[segment.y][segment.x].isHead = true
         }
       })
@@ -96,12 +91,8 @@ onMounted(() => {
     topPlayers.value = currentPlayers.slice(0, 5)
 
     const mySnake = snakesMap[props.playerName]
-    if (mySnake) {
-      emit('update-score', mySnake.score)
-      isPlaying.value = true
-    } else {
-      isPlaying.value = false 
-    }
+    if (mySnake) { emit('update-score', mySnake.score); isPlaying.value = true } 
+    else { isPlaying.value = false }
   })
 
   onWS('game_over', (payload: any) => {
@@ -115,11 +106,7 @@ onUnmounted(() => {
   window.removeEventListener('resize', calculateTileSize)
 })
 
-const startGame = () => {
-  if (isPlaying.value) return
-  sendWS('start_game', {})
-}
-
+const startGame = () => { if (isPlaying.value) return; sendWS('start_game', {}) }
 const handleKeydown = (e: KeyboardEvent) => {
   if (e.target instanceof HTMLInputElement) return
   if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(e.key)) e.preventDefault()
@@ -163,25 +150,24 @@ const handleKeydown = (e: KeyboardEvent) => {
             :key="'tile-' + x + '-' + y"
             class="tile"
             :class="{ 
-              'snake': tile.isSnake, 
               'head': tile.isHead, 
               'apple': tile.foodType === 'apple',
-              'star': tile.foodType === 'star'
+              'star': tile.foodType === 'star',
+              'rainbow-snake': tile.isSnake && tile.snakeColor === 'rainbow',
+              'golden-snake': tile.isSnake && tile.snakeColor === 'golden'
             }"
+            :style="(tile.isSnake && !['rainbow', 'golden'].includes(tile.snakeColor)) 
+              ? { backgroundColor: tile.snakeColor, filter: tile.isHead ? 'brightness(0.7)' : 'none' } 
+              : {}"
           ></div>
         </template>
       </div>
     </div>
 
     <div class="bottom-actions">
-      <button class="secondary">商店</button>
+      <button class="secondary" @click="emit('open-shop')">商店</button>
       <button class="secondary" @click="emit('open-pokedex')">圖鑑</button>
-      <button 
-        class="start" 
-        @click="startGame"
-        :disabled="isPlaying"
-        :style="{ opacity: isPlaying ? 0.6 : 1, cursor: isPlaying ? 'not-allowed' : 'pointer' }"
-      >
+      <button class="start" @click="startGame" :disabled="isPlaying" :style="{ opacity: isPlaying ? 0.6 : 1, cursor: isPlaying ? 'not-allowed' : 'pointer' }">
         {{ isPlaying ? '遊戲進行中...' : (isInMatch ? '開始遊戲（房間中）' : '開始遊戲') }}
       </button>
     </div>

@@ -76,6 +76,10 @@ func main() {
 		// ✨ 註冊任務系統 API
 		api.GET("/tasks", authHandler.GetTasks)
 		api.POST("/tasks/claim/:id", authHandler.ClaimTask)
+
+		api.GET("/shop", authHandler.GetShop)
+		api.POST("/shop/buy", authHandler.BuySkin)
+		api.POST("/shop/equip", authHandler.EquipSkin)
 		
 		api.GET("/auth/discord/login", authHandler.DiscordLogin)
 		api.GET("/auth/discord/callback", authHandler.DiscordCallback)
