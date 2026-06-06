@@ -62,14 +62,14 @@ func (h *AuthHandler) GuestLogin(c *gin.Context) {
 	}
 
 	token := h.Session.CreateSession(user.ID, user.Username)
-	c.SetCookie("game_session", token, 86400, "/", "", false, true)
+	c.SetCookie("game_session", token, 86400, "/", "", true, true)
 	c.JSON(http.StatusOK, gin.H{"token": token, "username": user.Username})
 }
 
 func (h *AuthHandler) Logout(c *gin.Context) {
 	token, err := c.Cookie("game_session")
 	if err == nil { h.Session.DeleteSession(token) }
-	c.SetCookie("game_session", "", -1, "/", "", false, true)
+	c.SetCookie("game_session", "", -1, "/", "", true, true)
 	c.JSON(http.StatusOK, gin.H{"message": "登出成功"})
 }
 
