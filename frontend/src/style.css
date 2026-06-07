@@ -856,8 +856,8 @@ body {
 }
 
 .accept-btn {
-  background: #e2f5ec;
-  color: #22c55e;
+  background: #f1f5f9;
+  color: #64748b;
   border: none;
   padding: 6px 14px;
   border-radius: 8px;
@@ -869,8 +869,8 @@ body {
 .accept-btn:hover { background: #ccf0db; }
 
 .reject-btn {
-  background: #f1f5f9;
-  color: #64748b;
+  background: #e2f5ec;
+  color: #22c55e;
   border: none;
   padding: 6px 14px;
   border-radius: 8px;
