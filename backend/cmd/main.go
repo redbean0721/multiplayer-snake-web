@@ -1,6 +1,7 @@
 package main
 
 import (
+	"io"
 	"log"
 	"os"
 
@@ -40,6 +41,9 @@ func main() {
 
 	hub := store.NewHub(db)
 	sessionManager := store.NewSessionManager(db)
+
+	f, _ := os.Create("server.log")
+	gin.DefaultWriter = io.MultiWriter(f, os.Stdout)
 
 	r := gin.Default()
 	config := cors.DefaultConfig()
